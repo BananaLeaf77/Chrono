@@ -6,41 +6,47 @@ import (
 	"chronosphere/repository"
 	"chronosphere/service"
 	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
+	// Load .env
+	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
-		panic("Error loading .env file")
 	}
 
+	// Boot DB
 	db, _, err := config.BootDB()
 	if err != nil {
-		panic("Failed to connect to database")
+		log.Fatal("Failed to connect to database: ", err)
 	}
 
-	// whatsMeow, _, err := config.InitWA(*address)
-	// if err != nil {
-	// 	panic("Failed to initialize Whatsapp client")
-	// }
-
-	// Repository Initialization
+	// Init repositories
 	userRepo := repository.NewUserRepository(db)
+	otpRepo := repository.NewOTPRepository(db)
 
-	// Use Case Initialization
-	userUseCase := service.NewUserService(userRepo)
+	// Init services
+	userService := service.NewUserService(userRepo)
 
-	// Gin Initialization
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET not found in .env")
+	}
+	authService := service.NewAuthService(userRepo, otpRepo, jwtSecret)
+
+	// Init Gin
 	app := gin.Default()
-	// Middleware Initialization
 	config.InitMiddleware(app)
-	// Handler Initialization
-	delivery.NewUserHandler(app, userUseCase)
-	// Start the server
-	app.Run(":8080")
 
+	// Init handlers
+	delivery.NewUserHandler(app, userService)
+	delivery.NewAuthHandler(app, authService)
+
+	// Start server
+	if err := app.Run(":8080"); err != nil {
+		log.Fatal("Failed to start server: ", err)
+	}
 }

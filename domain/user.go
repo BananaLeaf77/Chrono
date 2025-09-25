@@ -56,6 +56,7 @@ type StudentPackage struct {
 // UseCase
 
 type UserUseCase interface {
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	CreateUser(ctx context.Context, user *User) error
 	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUserByUUID(ctx context.Context, uuid string) (*User, error)
@@ -64,12 +65,16 @@ type UserUseCase interface {
 	Login(ctx context.Context, email, password string) (*User, error)
 }
 type TeacherUseCase interface {
+	GetAllTeachers(ctx context.Context) ([]User, error)
+	GetTeacherByUUID(ctx context.Context, uuid string) (*User, error)
 	GetTeacherProfile(ctx context.Context, uuid string) (*TeacherProfile, error)
 	UpdateTeacherProfile(ctx context.Context, profile *TeacherProfile) error
 	AssignInstrument(ctx context.Context, teacherUUID, instrumentName string) error
 	RemoveInstrument(ctx context.Context, teacherUUID, instrumentName string) error
 }
 type StudentUseCase interface {
+	GetAllStudents(ctx context.Context) ([]User, error)
+	GetStudentByUUID(ctx context.Context, uuid string) (*User, error)
 	GetStudentProfile(ctx context.Context, uuid string) (*StudentProfile, error)
 	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
 	UpdateStudentQuota(ctx context.Context, studentUUID string, packageID int, delta int) error
@@ -78,6 +83,7 @@ type StudentUseCase interface {
 //REPOSITORY
 
 type UserRepository interface {
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	CreateUser(ctx context.Context, user *User) error
 	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUserByUUID(ctx context.Context, uuid string) (*User, error)
