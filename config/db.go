@@ -58,6 +58,7 @@ func BootDB() (*gorm.DB, *string, error) {
 	// Auto migrate semua schema
 	err = db.AutoMigrate(
 		&domain.User{},
+		&domain.OTP{},
 		&domain.TeacherProfile{},
 		&domain.Instrument{},
 		&domain.StudentProfile{},

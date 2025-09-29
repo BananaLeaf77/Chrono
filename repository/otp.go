@@ -3,54 +3,64 @@ package repository
 import (
 	"chronosphere/domain"
 	"context"
+	"log"
+	"strings"
 	"time"
 
-	"gorm.io/gorm"
+	"github.com/redis/go-redis/v9"
 )
 
-type otpRepository struct {
-	db *gorm.DB
+type otpRedisRepository struct {
+	client *redis.Client
 }
 
-type OTP struct {
-	ID        int       `gorm:"primaryKey"`
-	Email     string    `gorm:"uniqueIndex;not null"`
-	OTP       string    `gorm:"not null"`
-	Password  string    `gorm:"not null"` // password sementara
-	ExpiresAt time.Time `gorm:"not null"`
+func NewOTPRedisRepository(addr, password string, db int) domain.OTPRepository {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     addr,
+		Password: password,
+		DB:       db,
+	})
+	return &otpRedisRepository{client: rdb}
 }
 
-func NewOTPRepository(db *gorm.DB) domain.OTPRepository {
-	return &otpRepository{db: db}
-}
+func (r *otpRedisRepository) SaveOTP(ctx context.Context, email, otp, hashedPassword, name, phone string, ttl time.Duration) error {
+	key := "otp:" + email
 
-func (r *otpRepository) SaveOTP(ctx context.Context, email, otp, password string, ttl time.Duration) error {
-	record := OTP{
-		Email:     email,
-		OTP:       otp,
-		Password:  password,
-		ExpiresAt: time.Now().Add(ttl),
-	}
-	// UPSERT: jika email sudah ada, update
-	return r.db.WithContext(ctx).Where("email = ?", email).Assign(record).FirstOrCreate(&record).Error
-}
-
-func (r *otpRepository) VerifyOTP(ctx context.Context, email, otp string) (string, bool, error) {
-	var record OTP
-	if err := r.db.WithContext(ctx).First(&record, "email = ?", email).Error; err != nil {
-		return "", false, err
+	// Trim all values to remove invisible characters
+	data := map[string]string{
+		"otp":      strings.TrimSpace(otp),
+		"password": strings.TrimSpace(hashedPassword),
+		"name":     strings.TrimSpace(name),
+		"phone":    strings.TrimSpace(phone),
 	}
 
-	if record.ExpiresAt.Before(time.Now()) {
-		return "", false, nil
-	}
-	if record.OTP != otp {
-		return "", false, nil
+	if err := r.client.HSet(ctx, key, data).Err(); err != nil {
+		return err
 	}
 
-	return record.Password, true, nil
+	return r.client.Expire(ctx, key, ttl).Err()
 }
 
-func (r *otpRepository) DeleteOTP(ctx context.Context, email string) error {
-	return r.db.WithContext(ctx).Delete(&OTP{}, "email = ?", email).Error
+// Verifikasi OTP
+func (r *otpRedisRepository) VerifyOTP(ctx context.Context, email, otp string) (map[string]string, bool, error) {
+	key := "otp:" + email
+	vals, err := r.client.HGetAll(ctx, key).Result()
+	if err != nil {
+		return nil, false, err
+	}
+	if len(vals) == 0 {
+		return nil, false, nil // expired atau tidak ada
+	}
+
+	if vals["otp"] != otp {
+		return nil, false, nil
+	}
+	log.Println("DEBUG VerifyOTP raw password from Redis:", vals["password"])
+
+	return vals, true, nil
+}
+
+// Hapus data registrasi setelah sukses
+func (r *otpRedisRepository) DeleteOTP(ctx context.Context, email string) error {
+	return r.client.Del(ctx, "otp:"+email).Err()
 }

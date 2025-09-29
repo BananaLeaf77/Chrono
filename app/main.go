@@ -26,7 +26,7 @@ func main() {
 
 	// Init repositories
 	userRepo := repository.NewUserRepository(db)
-	otpRepo := repository.NewOTPRepository(db)
+	otpRepo := repository.NewOTPRedisRepository("localhost:6379", "", 0) // ✅ pakai Redis
 
 	// Init services
 	userService := service.NewUserService(userRepo)

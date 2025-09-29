@@ -63,12 +63,12 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
-	var req RegisterRequest
+	var req domain.User
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.authUC.Register(c.Request.Context(), req.Email, req.Password); err != nil {
+	if err := h.authUC.Register(c.Request.Context(), req.Email, req.Name, req.Phone, req.Password); err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}

@@ -8,7 +8,7 @@ import (
 
 type AuthUseCase interface {
 	GetAccessTokenManager() *utils.JWTManager
-	Register(ctx context.Context, email, password string) error
+	Register(ctx context.Context, email string, name string, telephone string, password string) error
 	VerifyOTP(ctx context.Context, email, otp string) error
 	Login(ctx context.Context, email, password string) (*AuthTokens, error)
 	ForgotPassword(ctx context.Context, email string) error

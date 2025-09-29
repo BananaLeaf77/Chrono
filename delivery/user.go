@@ -24,6 +24,8 @@ func NewUserHandler(app *gin.Engine, uc domain.UserUseCase) {
 
 func (h *userHandler) CreateUser(c *gin.Context) {
 	var user domain.User
+	user.Role = "student" // Default role is student
+	
 	if err := c.ShouldBindJSON(&user); err != nil {
 		utils.PrintLogInfo(nil, 400, "CreateUser - BindJSON")
 		c.JSON(400, gin.H{

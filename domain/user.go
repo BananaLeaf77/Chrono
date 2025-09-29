@@ -6,12 +6,14 @@ import (
 )
 
 type User struct {
-	UUID      string     `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"uuid"`
-	Name      string     `gorm:"not null" json:"name"`
-	Email     string     `gorm:"unique;not null" json:"email"`
-	Phone     string     `gorm:"unique;not null" json:"phone"`
-	Password  string     `gorm:"not null" json:"-"`
-	Role      string     `gorm:"not null" json:"role"` // student | teacher | admin
+	UUID     string  `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"uuid"`
+	Name     string  `gorm:"not null;size:50" json:"name"`
+	Email    string  `gorm:"unique;not null" json:"email"`
+	Phone    string  `gorm:"unique;not null;size:14" json:"phone"`
+	Password string  `gorm:"not null" json:"-"`
+	Role     string  `gorm:"not null" json:"role"`             // student | teacher | admin
+	Image    *string `gorm:"type:text" json:"image,omitempty"` // nullable, default NULL
+
 	CreatedAt time.Time  `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt *time.Time `gorm:"index" json:"deleted_at,omitempty"`
@@ -57,6 +59,7 @@ type StudentPackage struct {
 
 type UserUseCase interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	GetUserByTelephone(ctx context.Context, telephone string) (*User, error)
 	CreateUser(ctx context.Context, user *User) error
 	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUserByUUID(ctx context.Context, uuid string) (*User, error)
@@ -84,6 +87,7 @@ type StudentUseCase interface {
 
 type UserRepository interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	GetUserByTelephone(ctx context.Context, telephone string) (*User, error)
 	CreateUser(ctx context.Context, user *User) error
 	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUserByUUID(ctx context.Context, uuid string) (*User, error)

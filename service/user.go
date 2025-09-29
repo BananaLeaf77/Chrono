@@ -13,6 +13,10 @@ func NewUserService(repo domain.UserRepository) domain.UserUseCase {
 	return &userService{repo: repo}
 }
 
+func (s *userService) GetUserByTelephone(ctx context.Context, telephone string) (*domain.User, error) {
+	return s.repo.GetUserByTelephone(ctx, telephone)
+}
+
 func (s *userService) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
 	return s.repo.GetUserByEmail(ctx, email)
 }
