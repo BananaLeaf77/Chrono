@@ -36,6 +36,12 @@ func (s *authService) Login(ctx context.Context, email, password string) (*domai
 		log.Printf("❌ LOGIN: User not found - %s", email)
 		return nil, errors.New("invalid credentials")
 	}
+
+	log.Printf("LOGIN: User found - UUID: %s", user.UUID)
+	log.Printf("LOGIN: Input password: '%s'", password)
+	log.Printf("LOGIN: Stored hash: '%s'", user.Password)
+	log.Printf("LOGIN: Hash length: %d", len(user.Password))
+
 	// Compare password
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
@@ -63,6 +69,9 @@ func (s *authService) Login(ctx context.Context, email, password string) (*domai
 }
 
 func (s *authService) Register(ctx context.Context, email string, name string, telephone string, password string) error {
+	log.Printf("=== REGISTER: Starting registration for %s", email)
+	log.Printf("REGISTER: Input password: '%s' (length: %d)", password, len(password))
+
 	// Validasi input
 	if password == "" {
 		return errors.New("password cannot be empty")

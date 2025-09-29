@@ -3,7 +3,6 @@ package delivery
 import (
 	"chronosphere/config"
 	"chronosphere/domain"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -46,39 +45,56 @@ type ChangePasswordRequest struct {
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid request",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 
 	// Ambil userUUID dari context (dari JWT)
 	userUUID, exists := c.Get("userUUID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "User not authenticated",
+			"success": false,
+			"error":   "user not authenticated"})
 		return
 	}
 
 	if err := h.authUC.ChangePassword(c.Request.Context(), userUUID.(string), req.OldPassword, req.NewPassword); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "Failed to change password",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Password changed successfully"})
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid request",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 	if err := h.authUC.Register(c.Request.Context(), req.Email, req.Name, req.Phone, req.Password); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		c.JSON(http.StatusConflict, gin.H{
+			"message": "Failed to register",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 
-	fmt.Print(req)
-
-	c.JSON(http.StatusOK, gin.H{"message": "OTP sent"})
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "OTP sent"})
 }
 
 type VerifyOTPRequest struct {
@@ -89,14 +105,22 @@ type VerifyOTPRequest struct {
 func (h *AuthHandler) VerifyOTP(c *gin.Context) {
 	var req VerifyOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid request",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 	if err := h.authUC.VerifyOTP(c.Request.Context(), req.Email, req.OTP); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "Failed to verify OTP",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "User created successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "User created successfully"})
 }
 
 type LoginRequest struct {
@@ -107,17 +131,27 @@ type LoginRequest struct {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid request",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 
 	tokens, err := h.authUC.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "Login failed",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, tokens)
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"access_token":  tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
+		"message":       "Login successful"})
 }
 
 type ForgotPasswordRequest struct {
@@ -127,16 +161,24 @@ type ForgotPasswordRequest struct {
 func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	var req ForgotPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid request",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 
 	if err := h.authUC.ForgotPassword(c.Request.Context(), req.Email); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Failed to process forgot password",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "OTP sent for reset password"})
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "OTP sent for reset password"})
 }
 
 type ResetPasswordRequest struct {
@@ -148,14 +190,22 @@ type ResetPasswordRequest struct {
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid request",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 
 	if err := h.authUC.ResetPassword(c.Request.Context(), req.Email, req.OTP, req.NewPassword); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "Failed to reset password",
+			"success": false,
+			"error":   err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Password reset successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Password reset successfully"})
 }
