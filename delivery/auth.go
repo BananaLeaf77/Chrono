@@ -3,6 +3,7 @@ package delivery
 import (
 	"chronosphere/config"
 	"chronosphere/domain"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -31,6 +32,8 @@ func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase) {
 }
 
 type RegisterRequest struct {
+	Name     string `json:"name" binding:"required"`
+	Phone    string `json:"phone" binding:"required"`
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
@@ -63,7 +66,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
-	var req domain.User
+	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -72,6 +75,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
+
+	fmt.Print(req)
+
 	c.JSON(http.StatusOK, gin.H{"message": "OTP sent"})
 }
 

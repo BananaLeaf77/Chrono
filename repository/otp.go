@@ -26,13 +26,14 @@ func NewOTPRedisRepository(addr, password string, db int) domain.OTPRepository {
 func (r *otpRedisRepository) SaveOTP(ctx context.Context, email, otp, hashedPassword, name, phone string, ttl time.Duration) error {
 	key := "otp:" + email
 
-	// Trim all values to remove invisible characters
 	data := map[string]string{
 		"otp":      strings.TrimSpace(otp),
 		"password": strings.TrimSpace(hashedPassword),
 		"name":     strings.TrimSpace(name),
 		"phone":    strings.TrimSpace(phone),
 	}
+
+	log.Printf("DEBUG: Saving to Redis - OTP: %s, Hash: %s", data["otp"], data["password"])
 
 	if err := r.client.HSet(ctx, key, data).Err(); err != nil {
 		return err
@@ -41,7 +42,6 @@ func (r *otpRedisRepository) SaveOTP(ctx context.Context, email, otp, hashedPass
 	return r.client.Expire(ctx, key, ttl).Err()
 }
 
-// Verifikasi OTP
 func (r *otpRedisRepository) VerifyOTP(ctx context.Context, email, otp string) (map[string]string, bool, error) {
 	key := "otp:" + email
 	vals, err := r.client.HGetAll(ctx, key).Result()
@@ -49,18 +49,17 @@ func (r *otpRedisRepository) VerifyOTP(ctx context.Context, email, otp string) (
 		return nil, false, err
 	}
 	if len(vals) == 0 {
-		return nil, false, nil // expired atau tidak ada
+		return nil, false, nil
 	}
 
 	if vals["otp"] != otp {
 		return nil, false, nil
 	}
-	log.Println("DEBUG VerifyOTP raw password from Redis:", vals["password"])
 
+	log.Println("DEBUG VerifyOTP raw password from Redis:", vals["password"])
 	return vals, true, nil
 }
 
-// Hapus data registrasi setelah sukses
 func (r *otpRedisRepository) DeleteOTP(ctx context.Context, email string) error {
 	return r.client.Del(ctx, "otp:"+email).Err()
 }

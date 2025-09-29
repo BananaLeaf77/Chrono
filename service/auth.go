@@ -23,40 +23,29 @@ func NewAuthService(userRepo domain.UserRepository, otpRepo domain.OTPRepository
 	return &authService{
 		userRepo:     userRepo,
 		otpRepo:      otpRepo,
-		accessToken:  utils.NewJWTManager(secret, time.Hour),      // 1 jam
-		refreshToken: utils.NewJWTManager(secret, 7*24*time.Hour), // 7 hari
+		accessToken:  utils.NewJWTManager(secret, time.Hour),
+		refreshToken: utils.NewJWTManager(secret, 7*24*time.Hour),
 	}
 }
 
 func (s *authService) Login(ctx context.Context, email, password string) (*domain.AuthTokens, error) {
-	log.Printf("=== DEBUG: Login Analysis ===")
-	log.Printf("DEBUG: Login attempt for email: %s", email)
+	log.Printf("=== LOGIN: Attempting login for %s", email)
 
 	user, err := s.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
-		log.Printf("DEBUG: User not found for email: %s, error: %v", email, err)
+		log.Printf("❌ LOGIN: User not found - %s", email)
 		return nil, errors.New("invalid credentials")
 	}
-
-	log.Printf("DEBUG: User found - UUID: %s, Email: %s", user.UUID, user.Email)
-	log.Printf("DEBUG: Input password: '%s'", password)
-	log.Printf("DEBUG: Stored hash: '%s'", user.Password)
-	log.Printf("DEBUG: Stored hash length: %d", len(user.Password))
-
-	// Try with trimmed hash
-	storedHash := user.Password
-	log.Printf("DEBUG: Stored hash: '%s'", storedHash)
-	log.Printf("DEBUG: Stored hash length: %d", len(storedHash))
-
-	err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password))
+	// Compare password
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
-		log.Printf("❌ DEBUG: Password comparison failed: %v", err)
+		log.Printf("❌ LOGIN: Password mismatch for %s: %v", email, err)
 		return nil, errors.New("invalid credentials")
 	}
 
-	log.Printf("✅ DEBUG: Password verified successfully")
+	log.Printf("✅ LOGIN: Password verified for %s", email)
 
-	// generate tokens pakai JWTManager
+	// Generate tokens
 	accessToken, err := s.accessToken.GenerateToken(user.UUID)
 	if err != nil {
 		return nil, err
@@ -74,7 +63,15 @@ func (s *authService) Login(ctx context.Context, email, password string) (*domai
 }
 
 func (s *authService) Register(ctx context.Context, email string, name string, telephone string, password string) error {
-	// cek email & telepon
+	// Validasi input
+	if password == "" {
+		return errors.New("password cannot be empty")
+	}
+	if email == "" {
+		return errors.New("email cannot be empty")
+	}
+
+	// Cek email & telepon
 	if _, err := s.userRepo.GetUserByEmail(ctx, email); err == nil {
 		return errors.New("email already exists")
 	}
@@ -82,111 +79,96 @@ func (s *authService) Register(ctx context.Context, email string, name string, t
 		return errors.New("telephone already exists")
 	}
 
-	log.Printf("=== DEBUG: Registration Hash Analysis ===")
-	log.Printf("DEBUG: Input password: '%s'", password)
-
-	// Use hardcoded password for testing to ensure consistency
-	testPassword := "123123"
-	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+	// Hash password
+	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to hash password: %w", err)
 	}
 	hashedPassword := string(hashedBytes)
 
-	log.Printf("DEBUG: Generated hash: %s", hashedPassword)
-	log.Printf("DEBUG: Hash length: %d", len(hashedPassword))
+	log.Printf("REGISTER: Generated hash: %s", hashedPassword)
+	log.Printf("REGISTER: Hash length: %d", len(hashedPassword))
 
-	// Test it immediately
-	testErr := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(testPassword))
+	// Test hash immediately
+	testErr := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if testErr != nil {
-		log.Printf("❌ DEBUG: Hash verification failed: %v", testErr)
+		log.Printf("❌ REGISTER: Hash verification failed: %v", testErr)
 		return fmt.Errorf("hash verification failed: %w", testErr)
 	}
-	log.Printf("✅ DEBUG: Hash verification passed")
+	log.Printf("✅ REGISTER: Hash verification passed")
 
-	// generate otp
+	// Generate OTP
 	otp, err := utils.GenerateOTP(6)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to generate OTP: %w", err)
 	}
 
+	// Save to Redis
 	if err := s.otpRepo.SaveOTP(ctx, email, otp, hashedPassword, name, telephone, 5*time.Minute); err != nil {
-		return err
+		return fmt.Errorf("failed to save OTP: %w", err)
 	}
-	log.Printf("DEBUG: OTP for %s = %s", email, otp)
-	log.Printf("DEBUG: Hash saved to Redis: %s", hashedPassword)
 
-	// kirim email OTP
+	log.Printf("REGISTER: OTP for %s = %s", email, otp)
+	log.Printf("REGISTER: Successfully saved registration data to Redis")
+
+	// Kirim email OTP
 	subject := "Your MadEU OTP Code"
 	body := fmt.Sprintf("Your OTP code is: %s (valid for 5 minutes)", otp)
 	if err := utils.SendEmail(email, subject, body); err != nil {
 		return fmt.Errorf("failed to send OTP email: %w", err)
 	}
 
+	log.Printf("✅ REGISTER: Registration process completed for %s", email)
 	return nil
 }
 
 func (s *authService) VerifyOTP(ctx context.Context, email, otp string) error {
+	log.Printf("=== VERIFY OTP: Verifying OTP for %s", email)
+
 	data, valid, err := s.otpRepo.VerifyOTP(ctx, email, otp)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to verify OTP: %w", err)
 	}
 	if !valid {
-		return errors.New("invalid or expired otp")
+		return errors.New("invalid or expired OTP")
 	}
 
-	log.Printf("=== DEBUG: OTP Verification Flow ===")
-	log.Printf("DEBUG: Redis password hash: %s", data["password"])
-	log.Printf("DEBUG: Redis hash length: %d", len(data["password"]))
+	log.Printf("VERIFY OTP: Redis password hash: %s", data["password"])
+	log.Printf("VERIFY OTP: Redis hash length: %d", len(data["password"]))
 
-	// Test the Redis hash directly
-	testErr := bcrypt.CompareHashAndPassword([]byte(data["password"]), []byte("123123"))
-	if testErr != nil {
-		log.Printf("❌ DEBUG: Redis hash test FAILED: %v", testErr)
-		// If Redis hash is corrupted, generate a fresh one
-		log.Printf("DEBUG: Generating fresh hash due to Redis corruption")
-		freshHash, err := bcrypt.GenerateFromPassword([]byte("123123"), bcrypt.DefaultCost)
-		if err != nil {
-			return err
-		}
-		data["password"] = string(freshHash)
-	} else {
-		log.Printf("✅ DEBUG: Redis hash test PASSED")
-	}
-
+	// SELALU gunakan hash dari Redis (tidak perlu test dengan password hardcoded)
+	// Hash sudah diverifikasi saat registrasi
 	user := &domain.User{
 		Name:     data["name"],
 		Email:    email,
 		Phone:    data["phone"],
-		Password: data["password"],
+		Password: data["password"], // Gunakan hash dari Redis
 		Role:     "student",
 	}
 
-	log.Printf("DEBUG: User object before CreateUser - Password: %s", user.Password)
+	log.Printf("VERIFY OTP: Creating user with hash: %s", user.Password)
 
+	// Create user
 	if err := s.userRepo.CreateUser(ctx, user); err != nil {
-		log.Printf("DEBUG: CreateUser failed: %v", err)
-		return err
+		log.Printf("❌ VERIFY OTP: Failed to create user: %v", err)
+		return fmt.Errorf("failed to create user: %w", err)
 	}
 
-	// Immediately check what was stored
+	// Verify the stored user
 	storedUser, err := s.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
-		log.Printf("DEBUG: Failed to fetch user after creation: %v", err)
+		log.Printf("❌ VERIFY OTP: Failed to fetch user after creation: %v", err)
 	} else {
-		log.Printf("DEBUG: Stored user password after creation: %s", storedUser.Password)
-
-		// Test the stored hash
-		storedTestErr := bcrypt.CompareHashAndPassword([]byte(storedUser.Password), []byte("123123"))
-		if storedTestErr != nil {
-			log.Printf("❌ DEBUG: Stored hash test FAILED: %v", storedTestErr)
-		} else {
-			log.Printf("✅ DEBUG: Stored hash test PASSED")
-		}
+		log.Printf("✅ VERIFY OTP: User created successfully - UUID: %s", storedUser.UUID)
+		log.Printf("VERIFY OTP: Final stored hash: %s", storedUser.Password)
 	}
 
-	_ = s.otpRepo.DeleteOTP(ctx, email)
-	log.Printf("DEBUG: User created successfully for: %s", email)
+	// Clean up OTP
+	if err := s.otpRepo.DeleteOTP(ctx, email); err != nil {
+		log.Printf("WARNING: Failed to delete OTP: %v", err)
+	}
+
+	log.Printf("✅ VERIFY OTP: OTP verification completed for %s", email)
 	return nil
 }
 
@@ -201,22 +183,23 @@ func (s *authService) ForgotPassword(ctx context.Context, email string) error {
 		return err
 	}
 
-	// save OTP (password kosong, name kosong, phone kosong)
 	return s.otpRepo.SaveOTP(ctx, email, otp, "", "", "", 5*time.Minute)
 }
 
-// Reset Password
 func (s *authService) ResetPassword(ctx context.Context, email, otp, newPassword string) error {
 	_, valid, err := s.otpRepo.VerifyOTP(ctx, email, otp)
 	if err != nil {
 		return err
 	}
 	if !valid {
-		return errors.New("invalid or expired otp")
+		return errors.New("invalid or expired OTP")
 	}
 
-	// hash new password
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	// Hash new password
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
 
 	user, err := s.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
@@ -224,14 +207,11 @@ func (s *authService) ResetPassword(ctx context.Context, email, otp, newPassword
 	}
 	user.Password = string(hashed)
 
-	// update user
 	if err := s.userRepo.UpdateUser(ctx, user); err != nil {
 		return err
 	}
 
-	// hapus OTP biar ga reuse
 	_ = s.otpRepo.DeleteOTP(ctx, email)
-
 	return nil
 }
 
@@ -241,11 +221,15 @@ func (s *authService) ChangePassword(ctx context.Context, userUUID, oldPassword,
 		return err
 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)) != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
 		return errors.New("old password mismatch")
 	}
 
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
 	user.Password = string(hashed)
 	return s.userRepo.UpdateUser(ctx, user)
 }
