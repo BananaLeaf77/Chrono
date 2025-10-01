@@ -13,26 +13,13 @@ func NewTeacherService(TeacherRepo domain.TeacherRepository) domain.TeacherUseCa
 	return &teacherService{repo: TeacherRepo}
 }
 
-func (s *teacherService) GetAllTeachers(ctx context.Context) ([]domain.User, error) {
-	return s.repo.GetAllTeachers(ctx)
+func (s *teacherService) GetMyProfile(ctx context.Context, uuid string) (*domain.User, error) {
+	return s.repo.GetMyProfile(ctx, uuid)
 }
 
-func (s *teacherService) GetTeacherByUUID(ctx context.Context, uuid string) (*domain.User, error) {
-	return s.repo.GetTeacherByUUID(ctx, uuid)
-}
-
-func (s *teacherService) GetTeacherProfile(ctx context.Context, uuid string) (*domain.TeacherProfile, error) {
-	return s.repo.GetTeacherProfile(ctx, uuid)
-}
-
-func (s *teacherService) UpdateTeacherProfile(ctx context.Context, profile *domain.TeacherProfile) error {
-	return s.repo.UpdateTeacherProfile(ctx, profile)
-}
-
-func (s *teacherService) AssignInstrument(ctx context.Context, teacherUUID, instrumentName string) error {
-	return s.repo.AssignInstrument(ctx, teacherUUID, instrumentName)
-}
-
-func (s *teacherService) RemoveInstrument(ctx context.Context, teacherUUID, instrumentName string) error {
-	return s.repo.RemoveInstrument(ctx, teacherUUID, instrumentName)
+func (s *teacherService) UpdateTeacherData(ctx context.Context, userUUID string, user *domain.User) error {
+	if user == nil {
+		return nil
+	}
+	return s.repo.UpdateTeacherData(ctx, userUUID, user)
 }

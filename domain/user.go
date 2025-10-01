@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+const (
+	RoleAdmin   = "admin"
+	RoleTeacher = "teacher"
+	RoleStudent = "student"
+)
+
 type User struct {
 	UUID     string  `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"uuid"`
 	Name     string  `gorm:"not null;size:50" json:"name"`
@@ -29,8 +35,11 @@ type TeacherProfile struct {
 }
 
 type Instrument struct {
-	ID   int    `gorm:"primaryKey" json:"id"`
-	Name string `gorm:"unique;not null" json:"name"`
+	ID        int        `gorm:"primaryKey" json:"id"`
+	Name      string     `gorm:"unique;not null" json:"name"`
+	CreatedAt time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt *time.Time `gorm:"index" json:"deleted_at,omitempty"`
 }
 
 type StudentProfile struct {
@@ -39,9 +48,13 @@ type StudentProfile struct {
 }
 
 type Package struct {
-	ID    int    `gorm:"primaryKey" json:"id"`
-	Name  string `gorm:"not null" json:"name"`  // contoh: "Gitar Privat 4x/Bulan"
-	Quota int    `gorm:"not null" json:"quota"` // contoh: 4
+	ID          int        `gorm:"primaryKey" json:"id"`
+	Name        string     `gorm:"not null" json:"name"`  // contoh: "Gitar Privat 4x/Bulan"
+	Quota       int        `gorm:"not null" json:"quota"` // contoh: 4
+	Description string     `json:"description"`
+	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt   *time.Time `gorm:"index" json:"deleted_at,omitempty"`
 }
 
 type StudentPackage struct {
@@ -55,7 +68,32 @@ type StudentPackage struct {
 	Package *Package `gorm:"foreignKey:PackageID" json:"package,omitempty"`
 }
 
-// UseCase
+// USE CASE
+type AdminUseCase interface {
+	CreateTeacher(ctx context.Context, user *User) (*User, error)
+	UpdateTeacherProfile(ctx context.Context, profile *TeacherProfile) error
+
+	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
+
+	CreatePackage(ctx context.Context, pkg *Package) (*Package, error)
+	UpdatePackage(ctx context.Context, pkg *Package) error
+	DeletePackage(ctx context.Context, id int) error
+
+	CreateInstrument(ctx context.Context, instrument *Instrument) (*Instrument, error)
+	UpdateInstrument(ctx context.Context, instrument *Instrument) error
+	DeleteInstrument(ctx context.Context, id int) error
+
+	GetAllPackages(ctx context.Context) ([]Package, error)
+	GetAllInstruments(ctx context.Context) ([]Instrument, error)
+	GetAllUsers(ctx context.Context) ([]User, error)
+	GetAllTeachers(ctx context.Context) ([]User, error)
+	GetAllStudents(ctx context.Context) ([]User, error)
+
+	GetStudentByUUID(ctx context.Context, uuid string) (*User, error)
+	GetTeacherByUUID(ctx context.Context, uuid string) (*User, error)
+
+	DeleteUser(ctx context.Context, uuid string) error
+}
 
 type UserUseCase interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
@@ -68,22 +106,41 @@ type UserUseCase interface {
 	Login(ctx context.Context, email, password string) (*User, error)
 }
 type TeacherUseCase interface {
-	GetAllTeachers(ctx context.Context) ([]User, error)
-	GetTeacherByUUID(ctx context.Context, uuid string) (*User, error)
-	GetTeacherProfile(ctx context.Context, uuid string) (*TeacherProfile, error)
-	UpdateTeacherProfile(ctx context.Context, profile *TeacherProfile) error
-	AssignInstrument(ctx context.Context, teacherUUID, instrumentName string) error
-	RemoveInstrument(ctx context.Context, teacherUUID, instrumentName string) error
-}
-type StudentUseCase interface {
-	GetAllStudents(ctx context.Context) ([]User, error)
-	GetStudentByUUID(ctx context.Context, uuid string) (*User, error)
-	GetStudentProfile(ctx context.Context, uuid string) (*StudentProfile, error)
-	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
-	UpdateStudentQuota(ctx context.Context, studentUUID string, packageID int, delta int) error
+	GetMyProfile(ctx context.Context, userUUID string) (*User, error)
+	UpdateTeacherData(ctx context.Context, userUUID string, user *User) error
 }
 
-//REPOSITORY
+type StudentUseCase interface {
+	GetMyProfile(ctx context.Context, userUUID string) (*User, error)
+	UpdateStudentData(ctx context.Context, userUUID string, user *User) error
+}
+
+// REPOSITORY
+type AdminRepository interface {
+	CreateTeacher(ctx context.Context, user *User) (*User, error)
+	UpdateTeacherProfile(ctx context.Context, profile *TeacherProfile) error
+
+	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
+
+	CreatePackage(ctx context.Context, pkg *Package) (*Package, error)
+	UpdatePackage(ctx context.Context, pkg *Package) error
+	DeletePackage(ctx context.Context, id int) error
+
+	CreateInstrument(ctx context.Context, instrument *Instrument) (*Instrument, error)
+	UpdateInstrument(ctx context.Context, instrument *Instrument) error
+	DeleteInstrument(ctx context.Context, id int) error
+
+	GetAllPackages(ctx context.Context) ([]Package, error)
+	GetAllInstruments(ctx context.Context) ([]Instrument, error)
+	GetAllUsers(ctx context.Context) ([]User, error)
+	GetAllTeachers(ctx context.Context) ([]User, error)
+	GetAllStudents(ctx context.Context) ([]User, error)
+
+	GetStudentByUUID(ctx context.Context, uuid string) (*User, error)
+	GetTeacherByUUID(ctx context.Context, uuid string) (*User, error)
+
+	DeleteUser(ctx context.Context, uuid string) error
+}
 
 type UserRepository interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
@@ -96,17 +153,11 @@ type UserRepository interface {
 	Login(ctx context.Context, email, password string) (*User, error)
 }
 type TeacherRepository interface {
-	GetAllTeachers(ctx context.Context) ([]User, error)
-	GetTeacherByUUID(ctx context.Context, uuid string) (*User, error)
-	GetTeacherProfile(ctx context.Context, uuid string) (*TeacherProfile, error)
-	UpdateTeacherProfile(ctx context.Context, profile *TeacherProfile) error
-	AssignInstrument(ctx context.Context, teacherUUID, instrumentName string) error
-	RemoveInstrument(ctx context.Context, teacherUUID, instrumentName string) error
+	GetMyProfile(ctx context.Context, userUUID string) (*User, error)
+	UpdateTeacherData(ctx context.Context, userUUID string, user *User) error
 }
+
 type StudentRepository interface {
-	GetAllStudents(ctx context.Context) ([]User, error)
-	GetStudentByUUID(ctx context.Context, uuid string) (*User, error)
-	GetStudentProfile(ctx context.Context, uuid string) (*StudentProfile, error)
-	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
-	UpdateStudentQuota(ctx context.Context, studentUUID string, packageID int, delta int) error
+	GetMyProfile(ctx context.Context, userUUID string) (*User, error)
+	UpdateStudentData(ctx context.Context, userUUID string, user *User) error
 }

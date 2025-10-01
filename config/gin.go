@@ -65,22 +65,41 @@ func InitMiddleware(app *gin.Engine) {
 func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Authorization header missing",
+			})
 			c.Abort()
 			return
 		}
 
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Invalid authorization header format",
+			})
+			c.Abort()
+			return
+		}
+
+		// Ambil token
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 		userUUID, err := jwtManager.VerifyToken(tokenStr)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Invalid or expired token",
+				"error":   err.Error(),
+			})
 			c.Abort()
 			return
 		}
 
-		// simpan userUUID ke context
+		// Simpan userUUID ke context untuk dipakai di handler
 		c.Set("userUUID", userUUID)
+
+		// Lanjut ke handler berikutnya
 		c.Next()
 	}
 }

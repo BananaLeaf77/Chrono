@@ -26,10 +26,11 @@ func main() {
 
 	// Init repositories
 	userRepo := repository.NewUserRepository(db)
+	studentRepo := repository.NewStudentRepository(db)
 	otpRepo := repository.NewOTPRedisRepository("localhost:6379", "", 0) // ✅ pakai Redis
 
 	// Init services
-	userService := service.NewUserService(userRepo)
+	studentService := service.NewStudentUseCase(studentRepo)
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
@@ -42,7 +43,7 @@ func main() {
 	config.InitMiddleware(app)
 
 	// Init handlers
-	delivery.NewUserHandler(app, userService)
+	delivery.NewStudentHandler(app, studentService)
 	delivery.NewAuthHandler(app, authService)
 
 	// Start server

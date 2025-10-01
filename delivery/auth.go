@@ -42,39 +42,6 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"new_password" binding:"required"`
 }
 
-func (h *AuthHandler) ChangePassword(c *gin.Context) {
-	var req ChangePasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "Invalid request",
-			"success": false,
-			"error":   err.Error()})
-		return
-	}
-
-	// Ambil userUUID dari context (dari JWT)
-	userUUID, exists := c.Get("userUUID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"message": "User not authenticated",
-			"success": false,
-			"error":   "user not authenticated"})
-		return
-	}
-
-	if err := h.authUC.ChangePassword(c.Request.Context(), userUUID.(string), req.OldPassword, req.NewPassword); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"message": "Failed to change password",
-			"success": false,
-			"error":   err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Password changed successfully"})
-}
-
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -158,54 +125,80 @@ type ForgotPasswordRequest struct {
 	Email string `json:"email" binding:"required,email"`
 }
 
-func (h *AuthHandler) ForgotPassword(c *gin.Context) {
-	var req ForgotPasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "Invalid request",
-			"success": false,
-			"error":   err.Error()})
-		return
-	}
-
-	if err := h.authUC.ForgotPassword(c.Request.Context(), req.Email); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "Failed to process forgot password",
-			"success": false,
-			"error":   err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "OTP sent for reset password"})
-}
-
 type ResetPasswordRequest struct {
 	Email       string `json:"email" binding:"required,email"`
 	OTP         string `json:"otp" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required"`
 }
 
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request",
+			"error":   err.Error()})
+		return
+	}
+
+	if err := h.authUC.ForgotPassword(c.Request.Context(), req.Email); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to process request",
+			"error":   err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "OTP sent for reset password"})
+}
+
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "Invalid request",
 			"success": false,
+			"message": "Invalid request",
 			"error":   err.Error()})
 		return
 	}
 
 	if err := h.authUC.ResetPassword(c.Request.Context(), req.Email, req.OTP, req.NewPassword); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"message": "Failed to reset password",
 			"success": false,
+			"message": "Failed to reset password",
 			"error":   err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Password reset successfully"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Password reset successfully"})
+}
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request",
+			"error":   err.Error()})
+		return
+	}
+
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Failed to get user from context",
+			"error":   "unauthorized"})
+		return
+	}
+
+	if err := h.authUC.ChangePassword(c.Request.Context(), userUUID.(string), req.OldPassword, req.NewPassword); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Failed to change password",
+			"error":   err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Password changed successfully"})
 }

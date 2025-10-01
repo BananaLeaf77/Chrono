@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -68,6 +69,35 @@ func BootDB() (*gorm.DB, *string, error) {
 	if err != nil {
 		log.Fatal("❌ Failed to ", utils.ColorText("auto-migrate database schemas", utils.Red), " error: ", err)
 		return nil, nil, err
+	}
+
+	// Seed initial admin user
+	var count int64
+	db.Model(&domain.User{}).Where("role = ?", "admin").Count(&count)
+	if count == 0 {
+		adminEmail := os.Getenv("ADMIN_EMAIL")
+		adminPass := os.Getenv("ADMIN_PASSWORD")
+		adminName := os.Getenv("ADMIN_NAME")
+		adminPhone := os.Getenv("ADMIN_PHONE")
+
+		if adminEmail != "" && adminPass != "" {
+			hashed, _ := bcrypt.GenerateFromPassword([]byte(adminPass), bcrypt.DefaultCost)
+			adminUser := domain.User{
+				Name:     adminName,
+				Email:    adminEmail,
+				Phone:    adminPhone,
+				Password: string(hashed),
+				Role:     "admin",
+			}
+
+			if err := db.Create(&adminUser).Error; err != nil {
+				log.Fatalf("❌ Failed to seed admin user: %v", err)
+			} else {
+				log.Printf("✅ Seeded admin user: %s", adminEmail)
+			}
+		} else {
+			log.Print("⚠️ Skipping admin seeding, missing ADMIN_EMAIL or ADMIN_PASSWORD in env")
+		}
 	}
 
 	log.Print("✅ Connected to ", utils.ColorText("Database", utils.Green), " successfully")
