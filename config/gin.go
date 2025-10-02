@@ -61,7 +61,6 @@ func InitMiddleware(app *gin.Engine) {
 	})
 }
 
-// Auth Middleware
 func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
@@ -85,7 +84,7 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 
 		// Ambil token
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		userUUID, err := jwtManager.VerifyToken(tokenStr)
+		userUUID, role, err := jwtManager.VerifyToken(tokenStr)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
@@ -96,8 +95,9 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 			return
 		}
 
-		// Simpan userUUID ke context untuk dipakai di handler
+		// Simpan userUUID & role ke context
 		c.Set("userUUID", userUUID)
+		c.Set("role", role)
 
 		// Lanjut ke handler berikutnya
 		c.Next()

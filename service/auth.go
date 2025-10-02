@@ -29,7 +29,6 @@ func NewAuthService(userRepo domain.UserRepository, otpRepo domain.OTPRepository
 }
 
 func (s *authService) Login(ctx context.Context, email, password string) (*domain.AuthTokens, error) {
-
 	user, err := s.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, errors.New("invalid credentials")
@@ -41,13 +40,13 @@ func (s *authService) Login(ctx context.Context, email, password string) (*domai
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Generate tokens
-	accessToken, err := s.accessToken.GenerateToken(user.UUID)
+	// Generate tokens dengan UUID + Role
+	accessToken, err := s.accessToken.GenerateToken(user.UUID, user.Role)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := s.refreshToken.GenerateToken(user.UUID)
+	refreshToken, err := s.refreshToken.GenerateToken(user.UUID, user.Role)
 	if err != nil {
 		return nil, err
 	}

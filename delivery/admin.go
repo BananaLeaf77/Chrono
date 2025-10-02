@@ -1,7 +1,9 @@
 package delivery
 
 import (
+	"chronosphere/config"
 	"chronosphere/domain"
+	"chronosphere/middleware"
 	"chronosphere/utils"
 	"net/http"
 	"strconv"
@@ -14,10 +16,11 @@ type AdminHandler struct {
 	uc domain.AdminUseCase
 }
 
-func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase) {
+func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.JWTManager) {
 	h := &AdminHandler{uc: uc}
 
 	admin := app.Group("/admin")
+	admin.Use(config.AuthMiddleware(jwtManager), middleware.AdminOnly())
 	{
 		// Teacher
 		admin.POST("/teachers", h.CreateTeacher)

@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -19,41 +19,46 @@ func NewJWTManager(secretKey string, duration time.Duration) *JWTManager {
 	}
 }
 
-// GenerateToken membuat JWT token dengan payload userUUID
-func (j *JWTManager) GenerateToken(userUUID string) (string, error) {
+// GenerateToken membuat JWT token dengan payload userUUID dan role
+func (j *JWTManager) GenerateToken(userUUID string, role string) (string, error) {
 	claims := jwt.MapClaims{
-		"sub": userUUID,
-		"exp": time.Now().Add(j.tokenDuration).Unix(),
-		"iat": time.Now().Unix(),
+		"sub":  userUUID,
+		"role": role,
+		"exp":  time.Now().Add(j.tokenDuration).Unix(),
+		"iat":  time.Now().Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(j.secretKey)
 }
 
-// VerifyToken memvalidasi JWT dan mengembalikan userUUID
-func (j *JWTManager) VerifyToken(tokenStr string) (string, error) {
+// VerifyToken memverifikasi token dan mengembalikan UUID + Role
+func (j *JWTManager) VerifyToken(tokenStr string) (string, string, error) {
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		// pastikan signing method benar
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("invalid signing method")
+			return nil, fmt.Errorf("unexpected signing method")
 		}
 		return j.secretKey, nil
 	})
-	if err != nil {
-		return "", err
+
+	if err != nil || !token.Valid {
+		return "", "", fmt.Errorf("invalid token: %w", err)
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return "", errors.New("invalid token")
+	if !ok {
+		return "", "", fmt.Errorf("invalid token claims")
 	}
 
-	// ambil user UUID dari "sub"
 	userUUID, ok := claims["sub"].(string)
 	if !ok {
-		return "", errors.New("invalid token subject")
+		return "", "", fmt.Errorf("invalid sub claim")
 	}
 
-	return userUUID, nil
+	role, ok := claims["role"].(string)
+	if !ok {
+		return "", "", fmt.Errorf("invalid role claim")
+	}
+
+	return userUUID, role, nil
 }
