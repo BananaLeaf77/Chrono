@@ -71,7 +71,7 @@ type StudentPackage struct {
 // USE CASE
 type AdminUseCase interface {
 	CreateTeacher(ctx context.Context, user *User) (*User, error)
-	UpdateTeacherProfile(ctx context.Context, profile *TeacherProfile) error
+	UpdateTeacher(ctx context.Context, profile *User) error
 
 	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
 
@@ -118,7 +118,7 @@ type StudentUseCase interface {
 // REPOSITORY
 type AdminRepository interface {
 	CreateTeacher(ctx context.Context, user *User) (*User, error)
-	UpdateTeacherProfile(ctx context.Context, profile *TeacherProfile) error
+	UpdateTeacher(ctx context.Context, profile *User) error
 
 	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
 

@@ -23,11 +23,9 @@ func (r *adminRepo) CreateTeacher(ctx context.Context, user *domain.User) (*doma
 }
 
 // UpdateTeacherProfile updates a teacher’s profile
-func (r *adminRepo) UpdateTeacherProfile(ctx context.Context, profile *domain.TeacherProfile) error {
-	return r.db.WithContext(ctx).
-		Model(&domain.TeacherProfile{}).
-		Where("user_uuid = ?", profile.UserUUID).
-		Updates(profile).Error
+func (r *adminRepo) UpdateTeacher(ctx context.Context, profile *domain.User) error {
+	profile.UpdatedAt = time.Now()
+	return r.db.WithContext(ctx).Model(&domain.User{}).Where("uuid = ?", profile.UUID).Updates(profile).Error
 }
 
 func (r *adminRepo) UpdateInstrument(ctx context.Context, instrument *domain.Instrument) error {

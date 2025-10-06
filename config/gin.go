@@ -84,7 +84,7 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 
 		// Ambil token
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		userUUID, role, err := jwtManager.VerifyToken(tokenStr)
+		userUUID, role, name, err := jwtManager.VerifyToken(tokenStr)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
@@ -95,9 +95,10 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 			return
 		}
 
-		// Simpan userUUID & role ke context
+		// Simpan ke context
 		c.Set("userUUID", userUUID)
 		c.Set("role", role)
+		c.Set("name", name)
 
 		// Lanjut ke handler berikutnya
 		c.Next()

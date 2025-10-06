@@ -46,11 +46,11 @@ func (s *adminService) CreateTeacher(ctx context.Context, user *domain.User) (*d
 }
 
 // UpdateTeacherProfile updates teacher’s profile
-func (s *adminService) UpdateTeacherProfile(ctx context.Context, profile *domain.TeacherProfile) error {
+func (s *adminService) UpdateTeacher(ctx context.Context, profile *domain.User) error {
 	if profile == nil {
 		return errors.New("profile is nil")
 	}
-	return s.adminRepo.UpdateTeacherProfile(ctx, profile)
+	return s.adminRepo.UpdateTeacher(ctx, profile)
 }
 
 // AssignPackageToStudent assigns a package to a student

@@ -86,12 +86,12 @@ func (s *authService) Login(ctx context.Context, email, password string) (*domai
 	}
 
 	// Generate tokens dengan UUID + Role
-	accessToken, err := s.accessToken.GenerateToken(user.UUID, user.Role)
+	accessToken, err := s.accessToken.GenerateToken(user.UUID, user.Role, user.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := s.refreshToken.GenerateToken(user.UUID, user.Role)
+	refreshToken, err := s.refreshToken.GenerateToken(user.UUID, user.Role, user.Name)
 	if err != nil {
 		return nil, err
 	}

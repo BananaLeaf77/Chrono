@@ -92,13 +92,26 @@ type AssignPackageRequest struct {
 	PackageID   int    `json:"package_id" binding:"required"`
 }
 
+func getAPIHitter(c *gin.Context) string {
+	apiHitterVal, _ := c.Get("name")      // ini masih interface{}
+	apiHitter, _ := apiHitterVal.(string) // type assertion jadi string
+	if apiHitterVal == nil {
+		apiHitter = "unknown"
+		utils.PrintLogInfo(nil, 401, "Get API Hitter - Get Admin Name", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Unauthorized"})
+	}
+	return apiHitter
+}
+
 /* ---------- Handlers ---------- */
 
 func (h *AdminHandler) CreateTeacher(c *gin.Context) {
 	var req CreateTeacherRequest
+	name := getAPIHitter(c)
+
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(nil, 400, "CreateTeacher - BindJSON")
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		utils.PrintLogInfo(&name, 400, "CreateTeacher - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": utils.TranslateValidationError(err)})
 		return
 	}
 
@@ -113,61 +126,57 @@ func (h *AdminHandler) CreateTeacher(c *gin.Context) {
 
 	created, err := h.uc.CreateTeacher(c.Request.Context(), user)
 	if err != nil {
-		utils.PrintLogInfo(&req.Email, 500, "CreateTeacher - UseCase")
+		utils.PrintLogInfo(&name, 500, "CreateTeacher - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
+	utils.PrintLogInfo(&name, 201, "CreateTeacher", nil)
 	c.JSON(http.StatusCreated, gin.H{"success": true, "data": created})
 }
 
 func (h *AdminHandler) UpdateTeacherProfile(c *gin.Context) {
-	var req UpdateTeacherProfileRequest
+	var req domain.User
+	name := getAPIHitter(c)
+
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(nil, 400, "UpdateTeacherProfile - BindJSON")
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		utils.PrintLogInfo(&name, 400, "UpdateTeacherProfile - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": utils.TranslateValidationError(err)})
 		return
 	}
 
-	profile := &domain.TeacherProfile{
-		UserUUID: req.UserUUID,
-	}
-	if req.Bio != nil {
-		profile.Bio = *req.Bio
-	}
-
-	if err := h.uc.UpdateTeacherProfile(c.Request.Context(), profile); err != nil {
-		utils.PrintLogInfo(&req.UserUUID, 500, "UpdateTeacherProfile - UseCase")
+	if err := h.uc.UpdateTeacher(c.Request.Context(), &req); err != nil {
+		utils.PrintLogInfo(&name, 500, "UpdateTeacherProfile - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	utils.PrintLogInfo(&req.UserUUID, 200, "UpdateTeacherProfile")
+	utils.PrintLogInfo(&name, 200, "UpdateTeacherProfile", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Teacher profile updated"})
 }
 
 func (h *AdminHandler) AssignPackageToStudent(c *gin.Context) {
 	var req AssignPackageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(nil, 400, "AssignPackageToStudent - BindJSON")
+		utils.PrintLogInfo(nil, 400, "AssignPackageToStudent - BindJSON", &err)
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
 	if err := h.uc.AssignPackageToStudent(c.Request.Context(), req.StudentUUID, req.PackageID); err != nil {
-		utils.PrintLogInfo(&req.StudentUUID, 500, "AssignPackageToStudent - UseCase")
+		utils.PrintLogInfo(&req.StudentUUID, 500, "AssignPackageToStudent - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	utils.PrintLogInfo(&req.StudentUUID, 200, "AssignPackageToStudent")
+	utils.PrintLogInfo(&req.StudentUUID, 200, "AssignPackageToStudent", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Package assigned to student"})
 }
 
 func (h *AdminHandler) CreatePackage(c *gin.Context) {
 	var req CreatePackageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(nil, 400, "CreatePackage - BindJSON")
+		utils.PrintLogInfo(nil, 400, "CreatePackage - BindJSON", &err)
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -179,11 +188,11 @@ func (h *AdminHandler) CreatePackage(c *gin.Context) {
 
 	created, err := h.uc.CreatePackage(c.Request.Context(), pkg)
 	if err != nil {
-		utils.PrintLogInfo(nil, 500, "CreatePackage - UseCase")
+		utils.PrintLogInfo(nil, 500, "CreatePackage - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-
+	utils.PrintLogInfo(&req.Name, 201, "CreatePackage", nil)
 	c.JSON(http.StatusCreated, gin.H{"success": true, "data": created})
 }
 
@@ -193,7 +202,7 @@ func (h *AdminHandler) UpdatePackage(c *gin.Context) {
 
 	var req UpdatePackageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(&idStr, 400, "UpdatePackage - BindJSON")
+		utils.PrintLogInfo(&idStr, 400, "UpdatePackage - BindJSON", &err)
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -208,12 +217,12 @@ func (h *AdminHandler) UpdatePackage(c *gin.Context) {
 	}
 
 	if err := h.uc.UpdatePackage(c.Request.Context(), pkg); err != nil {
-		utils.PrintLogInfo(&idStr, 500, "UpdatePackage - UseCase")
+		utils.PrintLogInfo(&idStr, 500, "UpdatePackage - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	utils.PrintLogInfo(&idStr, 200, "UpdatePackage")
+	utils.PrintLogInfo(&idStr, 200, "UpdatePackage", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Package updated"})
 }
 
@@ -221,18 +230,18 @@ func (h *AdminHandler) DeletePackage(c *gin.Context) {
 	idStr := c.Param("id")
 	id, _ := strconv.Atoi(idStr)
 	if err := h.uc.DeletePackage(c.Request.Context(), id); err != nil {
-		utils.PrintLogInfo(&idStr, 500, "DeletePackage - UseCase")
+		utils.PrintLogInfo(&idStr, 500, "DeletePackage - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	utils.PrintLogInfo(&idStr, 200, "DeletePackage")
+	utils.PrintLogInfo(&idStr, 200, "DeletePackage", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Package deleted"})
 }
 
 func (h *AdminHandler) CreateInstrument(c *gin.Context) {
 	var req CreateInstrumentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(nil, 400, "CreateInstrument - BindJSON")
+		utils.PrintLogInfo(nil, 400, "CreateInstrument - BindJSON", &err)
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -240,10 +249,11 @@ func (h *AdminHandler) CreateInstrument(c *gin.Context) {
 	inst := &domain.Instrument{Name: req.Name}
 	created, err := h.uc.CreateInstrument(c.Request.Context(), inst)
 	if err != nil {
-		utils.PrintLogInfo(nil, 500, "CreateInstrument - UseCase")
+		utils.PrintLogInfo(nil, 500, "CreateInstrument - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+	utils.PrintLogInfo(&req.Name, 201, "CreateInstrument", nil)
 	c.JSON(http.StatusCreated, gin.H{"success": true, "data": created})
 }
 
@@ -253,7 +263,7 @@ func (h *AdminHandler) UpdateInstrument(c *gin.Context) {
 
 	var req UpdateInstrumentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(&idStr, 400, "UpdateInstrument - BindJSON")
+		utils.PrintLogInfo(&idStr, 400, "UpdateInstrument - BindJSON", &err)
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -264,12 +274,12 @@ func (h *AdminHandler) UpdateInstrument(c *gin.Context) {
 	}
 
 	if err := h.uc.UpdateInstrument(c.Request.Context(), inst); err != nil {
-		utils.PrintLogInfo(&idStr, 500, "UpdateInstrument - UseCase")
+		utils.PrintLogInfo(&idStr, 500, "UpdateInstrument - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	utils.PrintLogInfo(&idStr, 200, "UpdateInstrument")
+	utils.PrintLogInfo(&idStr, 200, "UpdateInstrument", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Instrument updated"})
 }
 
@@ -277,61 +287,66 @@ func (h *AdminHandler) DeleteInstrument(c *gin.Context) {
 	idStr := c.Param("id")
 	id, _ := strconv.Atoi(idStr)
 	if err := h.uc.DeleteInstrument(c.Request.Context(), id); err != nil {
-		utils.PrintLogInfo(&idStr, 500, "DeleteInstrument - UseCase")
+		utils.PrintLogInfo(&idStr, 500, "DeleteInstrument - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	utils.PrintLogInfo(&idStr, 200, "DeleteInstrument")
+	utils.PrintLogInfo(&idStr, 200, "DeleteInstrument", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Instrument deleted"})
 }
 
 func (h *AdminHandler) GetAllPackages(c *gin.Context) {
 	pkgs, err := h.uc.GetAllPackages(c.Request.Context())
 	if err != nil {
-		utils.PrintLogInfo(nil, 500, "GetAllPackages - UseCase")
+		utils.PrintLogInfo(nil, 500, "GetAllPackages - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+	utils.PrintLogInfo(nil, 200, "GetAllPackages", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": pkgs})
 }
 
 func (h *AdminHandler) GetAllInstruments(c *gin.Context) {
 	insts, err := h.uc.GetAllInstruments(c.Request.Context())
 	if err != nil {
-		utils.PrintLogInfo(nil, 500, "GetAllInstruments - UseCase")
+		utils.PrintLogInfo(nil, 500, "GetAllInstruments - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+	utils.PrintLogInfo(nil, 200, "GetAllInstruments", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": insts})
 }
 
 func (h *AdminHandler) GetAllUsers(c *gin.Context) {
 	users, err := h.uc.GetAllUsers(c.Request.Context())
 	if err != nil {
-		utils.PrintLogInfo(nil, 500, "GetAllUsers - UseCase")
+		utils.PrintLogInfo(nil, 500, "GetAllUsers - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+	utils.PrintLogInfo(nil, 200, "GetAllUsers", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": users})
 }
 
 func (h *AdminHandler) GetAllTeachers(c *gin.Context) {
 	teachers, err := h.uc.GetAllTeachers(c.Request.Context())
 	if err != nil {
-		utils.PrintLogInfo(nil, 500, "GetAllTeachers - UseCase")
+		utils.PrintLogInfo(nil, 500, "GetAllTeachers - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+	utils.PrintLogInfo(nil, 200, "GetAllTeachers", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": teachers})
 }
 
 func (h *AdminHandler) GetAllStudents(c *gin.Context) {
 	students, err := h.uc.GetAllStudents(c.Request.Context())
 	if err != nil {
-		utils.PrintLogInfo(nil, 500, "GetAllStudents - UseCase")
+		utils.PrintLogInfo(nil, 500, "GetAllStudents - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+	utils.PrintLogInfo(nil, 200, "GetAllStudents", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": students})
 }
 
@@ -339,10 +354,11 @@ func (h *AdminHandler) GetStudentByUUID(c *gin.Context) {
 	uuid := c.Param("uuid")
 	student, err := h.uc.GetStudentByUUID(c.Request.Context(), uuid)
 	if err != nil {
-		utils.PrintLogInfo(&uuid, 500, "GetStudentByUUID - UseCase")
+		utils.PrintLogInfo(&uuid, 500, "GetStudentByUUID - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+	utils.PrintLogInfo(&uuid, 200, "GetStudentByUUID", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": student})
 }
 
@@ -350,20 +366,22 @@ func (h *AdminHandler) GetTeacherByUUID(c *gin.Context) {
 	uuid := c.Param("uuid")
 	teacher, err := h.uc.GetTeacherByUUID(c.Request.Context(), uuid)
 	if err != nil {
-		utils.PrintLogInfo(&uuid, 500, "GetTeacherByUUID - UseCase")
+		utils.PrintLogInfo(&uuid, 500, "GetTeacherByUUID - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+
+	utils.PrintLogInfo(&uuid, 200, "GetTeacherByUUID", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": teacher})
 }
 
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	uuid := c.Param("uuid")
 	if err := h.uc.DeleteUser(c.Request.Context(), uuid); err != nil {
-		utils.PrintLogInfo(&uuid, 500, "DeleteUser - UseCase")
+		utils.PrintLogInfo(&uuid, 500, "DeleteUser - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	utils.PrintLogInfo(&uuid, 200, "DeleteUser")
+	utils.PrintLogInfo(&uuid, 200, "DeleteUser", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User deleted"})
 }
