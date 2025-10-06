@@ -33,13 +33,26 @@ func (r *otpRedisRepository) SaveOTP(ctx context.Context, email, otp, hashedPass
 		"phone":    strings.TrimSpace(phone),
 	}
 
-	log.Printf("DEBUG: Saving to Redis - OTP: %s, Hash: %s", data["otp"], data["password"])
-
 	if err := r.client.HSet(ctx, key, data).Err(); err != nil {
 		return err
 	}
+	if err := r.client.Expire(ctx, key, ttl).Err(); err != nil {
+		return err
+	}
+	return nil
+}
 
-	return r.client.Expire(ctx, key, ttl).Err()
+// GetOTP ambil data OTP dari Redis
+func (r *otpRedisRepository) GetOTP(ctx context.Context, email string) (map[string]string, error) {
+	key := "otp:" + email
+	data, err := r.client.HGetAll(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, nil // not found
+	}
+	return data, nil
 }
 
 func (r *otpRedisRepository) VerifyOTP(ctx context.Context, email, otp string) (map[string]string, bool, error) {

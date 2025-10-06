@@ -14,6 +14,7 @@ type AuthUseCase interface {
 	ForgotPassword(ctx context.Context, email string) error
 	ResetPassword(ctx context.Context, email, otp, newPassword string) error
 	ChangePassword(ctx context.Context, userUUID, oldPassword, newPassword string) error
+	ResendOTP(ctx context.Context, email string) error
 }
 
 type AuthTokens struct {

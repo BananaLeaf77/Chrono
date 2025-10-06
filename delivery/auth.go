@@ -3,6 +3,8 @@ package delivery
 import (
 	"chronosphere/config"
 	"chronosphere/domain"
+	"chronosphere/utils"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +24,7 @@ func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase) {
 		auth.POST("/login", handler.Login)
 		auth.POST("/forgot-password", handler.ForgotPassword)
 		auth.POST("/reset-password", handler.ResetPassword)
+		auth.POST("/resend-otp", handler.ResendOTP)
 
 		// Protected route
 		auth.Use(config.AuthMiddleware(handler.authUC.GetAccessTokenManager()))
@@ -30,11 +33,34 @@ func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase) {
 
 }
 
-type RegisterRequest struct {
-	Name     string `json:"name" binding:"required"`
-	Phone    string `json:"phone" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+type ResendOTPRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+func (h *AuthHandler) ResendOTP(c *gin.Context) {
+	var req ResendOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if err := h.authUC.ResendOTP(c.Request.Context(), req.Email); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to resend OTP",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "OTP resent successfully",
+	})
 }
 
 type ChangePasswordRequest struct {
@@ -42,26 +68,45 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"new_password" binding:"required"`
 }
 
+type RegisterRequest struct {
+	Name     string `json:"name" binding:"required,min=3,max=50"`
+	Phone    string `json:"phone" binding:"required,min=10,max=14,numeric"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=8,max=64"`
+}
+
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		fmt.Println(req)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "Invalid request",
 			"success": false,
-			"error":   err.Error()})
+			"message": "Invalid request payload",
+			"error":   utils.TranslateValidationError(err),
+		})
 		return
 	}
-	if err := h.authUC.Register(c.Request.Context(), req.Email, req.Name, req.Phone, req.Password); err != nil {
+
+	// role hardcoded student
+	if err := h.authUC.Register(
+		c.Request.Context(),
+		req.Email,
+		req.Name,
+		req.Phone,
+		req.Password,
+	); err != nil {
 		c.JSON(http.StatusConflict, gin.H{
-			"message": "Failed to register",
 			"success": false,
-			"error":   err.Error()})
+			"message": "Failed to register",
+			"error":   err.Error(),
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "OTP sent"})
+		"message": "OTP sent to your email",
+	})
 }
 
 type VerifyOTPRequest struct {

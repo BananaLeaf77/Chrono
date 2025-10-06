@@ -7,9 +7,16 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+)
+
+var (
+	ErrEmailExists     = errors.New("email already exists")
+	ErrTelephoneExists = errors.New("telephone already exists")
 )
 
 type authService struct {
@@ -26,6 +33,44 @@ func NewAuthService(userRepo domain.UserRepository, otpRepo domain.OTPRepository
 		accessToken:  utils.NewJWTManager(secret, time.Hour),
 		refreshToken: utils.NewJWTManager(secret, 7*24*time.Hour),
 	}
+}
+
+func (s *authService) ResendOTP(ctx context.Context, email string) error {
+	// cek apakah OTP lama ada
+	data, err := s.otpRepo.GetOTP(ctx, email)
+	if err != nil {
+		return fmt.Errorf("failed to get OTP: %w", err)
+	}
+	if data == nil {
+		return errors.New("no OTP found, please register or forgot password first")
+	}
+
+	// generate OTP baru
+	newOTP, err := utils.GenerateOTP(6)
+	if err != nil {
+		return err
+	}
+
+	// simpan ulang dengan TTL baru
+	err = s.otpRepo.SaveOTP(
+		ctx,
+		email,
+		newOTP,
+		data["password"],
+		data["name"],
+		data["phone"],
+		5*time.Minute,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save new OTP: %w", err)
+	}
+
+	// kirim OTP via email
+	if err := utils.SendEmail(email, "Your OTP Code", "Your new OTP is: "+newOTP); err != nil {
+		return fmt.Errorf("failed to send OTP email: %w", err)
+	}
+
+	return nil
 }
 
 func (s *authService) Login(ctx context.Context, email, password string) (*domain.AuthTokens, error) {
@@ -58,20 +103,11 @@ func (s *authService) Login(ctx context.Context, email, password string) (*domai
 }
 
 func (s *authService) Register(ctx context.Context, email string, name string, telephone string, password string) error {
-	// Validasi input
-	if password == "" {
-		return errors.New("password cannot be empty")
-	}
-	if email == "" {
-		return errors.New("email cannot be empty")
-	}
-
-	// Cek email & telepon
 	if _, err := s.userRepo.GetUserByEmail(ctx, email); err == nil {
-		return errors.New("email already exists")
+		return ErrEmailExists
 	}
 	if _, err := s.userRepo.GetUserByTelephone(ctx, telephone); err == nil {
-		return errors.New("telephone already exists")
+		return ErrTelephoneExists
 	}
 
 	// Hash password
@@ -81,26 +117,27 @@ func (s *authService) Register(ctx context.Context, email string, name string, t
 	}
 	hashedPassword := string(hashedBytes)
 
-	// Test hash immediately
-	testErr := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-	if testErr != nil {
-		return fmt.Errorf("hash verification failed: %w", testErr)
-	}
-
 	// Generate OTP
 	otp, err := utils.GenerateOTP(6)
 	if err != nil {
 		return fmt.Errorf("failed to generate OTP: %w", err)
 	}
 
+	theMinute := os.Getenv("OTP_TIME")
+	otpTime, err := strconv.Atoi(theMinute)
+	if err != nil || otpTime <= 0 {
+		otpTime = 5
+	}
+
 	// Save to Redis
-	if err := s.otpRepo.SaveOTP(ctx, email, otp, hashedPassword, name, telephone, 5*time.Minute); err != nil {
+	if err := s.otpRepo.SaveOTP(ctx, email, otp, hashedPassword, name, telephone, time.Duration(otpTime)*time.Minute); err != nil {
 		return fmt.Errorf("failed to save OTP: %w", err)
 	}
 
 	// Kirim email OTP
 	subject := "Your MadEU OTP Code"
-	body := fmt.Sprintf("Your OTP code is: %s (valid for 5 minutes)", otp)
+	body := fmt.Sprintf("Your OTP code is: %s (valid for %d minutes)", otp, otpTime)
+
 	if err := utils.SendEmail(email, subject, body); err != nil {
 		return fmt.Errorf("failed to send OTP email: %w", err)
 	}
