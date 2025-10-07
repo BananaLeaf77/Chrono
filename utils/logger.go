@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 )
 
@@ -33,4 +34,15 @@ func PrintLogInfo(username *string, statusCode int, functionName string, err *er
 	}
 	log.Info().Msg(fmt.Sprintf("User: %s | Status: %s | Function: %s", user, ColorStatus(statusCode), functionName))
 	fmt.Printf("%sUser: %s | Status: %s | Function: %s%s\n", logColor, user, ColorStatus(statusCode), functionName, Reset)
+}
+
+func GetAPIHitter(c *gin.Context) string {
+	apiHitterVal, _ := c.Get("name")      // ini masih interface{}
+	apiHitter, _ := apiHitterVal.(string) // type assertion jadi string
+	if apiHitterVal == nil {
+		apiHitter = "unknown"
+		PrintLogInfo(nil, 401, "Get API Hitter - Get Admin Name", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Unauthorized"})
+	}
+	return apiHitter
 }

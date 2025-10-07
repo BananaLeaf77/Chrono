@@ -67,7 +67,7 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
-				"message": "Authorization header missing",
+				"message": "Need Credential to Access this Resource (Authorization header missing)",
 			})
 			c.Abort()
 			return

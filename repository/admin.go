@@ -2,7 +2,9 @@ package repository
 
 import (
 	"chronosphere/domain"
+	"chronosphere/utils"
 	"context"
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -29,7 +31,25 @@ func (r *adminRepo) UpdateTeacher(ctx context.Context, profile *domain.User) err
 }
 
 func (r *adminRepo) UpdateInstrument(ctx context.Context, instrument *domain.Instrument) error {
-	return r.db.WithContext(ctx).Save(instrument).Error
+	var existing domain.Instrument
+
+	// ✅ Cek apakah instrument ada dan belum dihapus (soft delete)
+	if err := r.db.WithContext(ctx).
+		Where("id = ? AND deleted_at IS NULL", instrument.ID).
+		First(&existing).Error; err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New(utils.TranslateDBError(err)) // pakai translator
+		}
+		return errors.New(utils.TranslateDBError(err))
+	}
+
+	// ✅ Update data instrument
+	if err := r.db.WithContext(ctx).Save(instrument).Error; err != nil {
+		return errors.New(utils.TranslateDBError(err)) // pakai translator
+	}
+
+	return nil
 }
 
 func (r *adminRepo) UpdatePackage(ctx context.Context, pkg *domain.Package) error {
@@ -62,10 +82,26 @@ func (r *adminRepo) CreatePackage(ctx context.Context, pkg *domain.Package) (*do
 	return pkg, err
 }
 
-// CreateInstrument inserts a new instrument
+// ✅ Create Instrument
 func (r *adminRepo) CreateInstrument(ctx context.Context, instrument *domain.Instrument) (*domain.Instrument, error) {
-	err := r.db.WithContext(ctx).Create(instrument).Error
-	return instrument, err
+	// Cek apakah sudah ada instrument dengan nama sama & belum dihapus
+	var existing domain.Instrument
+	if err := r.db.WithContext(ctx).
+		Where("name = ? AND deleted_at IS NULL", instrument.Name).
+		First(&existing).Error; err == nil {
+		// Sudah ada, return error user-friendly
+		return nil, errors.New(utils.TranslateDBError(errors.New("23505"))) // mimic unique violation
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		// Error lain saat check
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	// Simpan instrument baru
+	if err := r.db.WithContext(ctx).Create(instrument).Error; err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	return instrument, nil
 }
 
 // GetAllPackages returns all packages
@@ -75,11 +111,17 @@ func (r *adminRepo) GetAllPackages(ctx context.Context) ([]domain.Package, error
 	return packages, err
 }
 
-// GetAllInstruments returns all instruments
+// ✅ Get All Instruments (skip soft deleted)
 func (r *adminRepo) GetAllInstruments(ctx context.Context) ([]domain.Instrument, error) {
 	var instruments []domain.Instrument
-	err := r.db.WithContext(ctx).Find(&instruments).Error
-	return instruments, err
+
+	if err := r.db.WithContext(ctx).
+		Where("deleted_at IS NULL").
+		Find(&instruments).Error; err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	return instruments, nil
 }
 
 // GetAllUsers returns all users
@@ -136,10 +178,27 @@ func (r *adminRepo) DeleteUser(ctx context.Context, uuid string) error {
 	return r.db.WithContext(ctx).Delete(&domain.User{}, "uuid = ?", uuid).Error
 }
 
+// ✅ Delete Instrument (soft delete aware)
 func (r *adminRepo) DeleteInstrument(ctx context.Context, id int) error {
-	return r.db.WithContext(ctx).Delete(&domain.Instrument{}, "id = ?", id).Error
-}
+	// Cek apakah instrument masih aktif (belum dihapus)
+	var existing domain.Instrument
+	if err := r.db.WithContext(ctx).
+		Where("id = ? AND deleted_at IS NULL", id).
+		First(&existing).Error; err != nil {
 
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New(utils.TranslateDBError(err))
+		}
+		return errors.New(utils.TranslateDBError(err))
+	}
+
+	// Lakukan soft delete
+	if err := r.db.WithContext(ctx).Delete(&existing).Error; err != nil {
+		return errors.New(utils.TranslateDBError(err))
+	}
+
+	return nil
+}
 func (r *adminRepo) DeletePackage(ctx context.Context, id int) error {
 	return r.db.WithContext(ctx).Delete(&domain.Package{}, "id = ?", id).Error
 }
