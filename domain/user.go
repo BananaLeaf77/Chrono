@@ -29,9 +29,9 @@ type User struct {
 }
 
 type TeacherProfile struct {
-	UserUUID    string       `gorm:"primaryKey;type:uuid" json:"user_uuid"`
+	UserUUID    string       `gorm:"primaryKey;type:uuid;constraint:OnDelete:CASCADE;" json:"user_uuid"`
 	Bio         string       `json:"bio"`
-	Instruments []Instrument `gorm:"many2many:teacher_instruments" json:"instruments"`
+	Instruments []Instrument `gorm:"many2many:teacher_instruments;constraint:OnDelete:CASCADE;" json:"instruments"`
 }
 
 type Instrument struct {
@@ -70,8 +70,8 @@ type StudentPackage struct {
 
 // USE CASE
 type AdminUseCase interface {
-	CreateTeacher(ctx context.Context, user *User) (*User, error)
-	UpdateTeacher(ctx context.Context, profile *User) error
+	CreateTeacher(ctx context.Context, user *User, instrumentIDs []int) (*User, error)
+	UpdateTeacher(ctx context.Context, user *User, instrumentIDs []int) error
 
 	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
 
@@ -117,8 +117,8 @@ type StudentUseCase interface {
 
 // REPOSITORY
 type AdminRepository interface {
-	CreateTeacher(ctx context.Context, user *User) (*User, error)
-	UpdateTeacher(ctx context.Context, profile *User) error
+	CreateTeacher(ctx context.Context, user *User, instrumentIDs []int) (*User, error)
+	UpdateTeacher(ctx context.Context, user *User, instrumentIDs []int) error
 
 	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
 

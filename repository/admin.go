@@ -5,6 +5,7 @@ import (
 	"chronosphere/utils"
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -16,18 +17,6 @@ type adminRepo struct {
 
 func NewAdminRepository(db *gorm.DB) domain.AdminRepository {
 	return &adminRepo{db: db}
-}
-
-// CreateTeacher creates a teacher (User with role=teacher)
-func (r *adminRepo) CreateTeacher(ctx context.Context, user *domain.User) (*domain.User, error) {
-	err := r.db.WithContext(ctx).Create(user).Error
-	return user, err
-}
-
-// UpdateTeacherProfile updates a teacher’s profile
-func (r *adminRepo) UpdateTeacher(ctx context.Context, profile *domain.User) error {
-	profile.UpdatedAt = time.Now()
-	return r.db.WithContext(ctx).Model(&domain.User{}).Where("uuid = ?", profile.UUID).Updates(profile).Error
 }
 
 func (r *adminRepo) UpdateInstrument(ctx context.Context, instrument *domain.Instrument) error {
@@ -131,15 +120,6 @@ func (r *adminRepo) GetAllUsers(ctx context.Context) ([]domain.User, error) {
 	return users, err
 }
 
-// GetAllTeachers returns all users with role=teacher
-func (r *adminRepo) GetAllTeachers(ctx context.Context) ([]domain.User, error) {
-	var teachers []domain.User
-	err := r.db.WithContext(ctx).
-		Where("role = ?", domain.RoleTeacher).
-		Find(&teachers).Error
-	return teachers, err
-}
-
 // GetAllStudents returns all users with role=student
 func (r *adminRepo) GetAllStudents(ctx context.Context) ([]domain.User, error) {
 	var students []domain.User
@@ -159,23 +139,6 @@ func (r *adminRepo) GetStudentByUUID(ctx context.Context, uuid string) (*domain.
 		return nil, err
 	}
 	return &student, nil
-}
-
-// GetTeacherByUUID fetches a teacher by UUID
-func (r *adminRepo) GetTeacherByUUID(ctx context.Context, uuid string) (*domain.User, error) {
-	var teacher domain.User
-	err := r.db.WithContext(ctx).Preload("TeacherProfile").
-		Where("uuid = ? AND role = ?", uuid, domain.RoleTeacher).
-		First(&teacher).Error
-	if err != nil {
-		return nil, err
-	}
-	return &teacher, nil
-}
-
-// DeleteUser removes a user by UUID (will cascade if FK constraints are set)
-func (r *adminRepo) DeleteUser(ctx context.Context, uuid string) error {
-	return r.db.WithContext(ctx).Delete(&domain.User{}, "uuid = ?", uuid).Error
 }
 
 // ✅ Delete Instrument (soft delete aware)
@@ -201,4 +164,200 @@ func (r *adminRepo) DeleteInstrument(ctx context.Context, id int) error {
 }
 func (r *adminRepo) DeletePackage(ctx context.Context, id int) error {
 	return r.db.WithContext(ctx).Delete(&domain.Package{}, "id = ?", id).Error
+}
+
+// TEACHER MANAGEMENT
+func (r *adminRepo) CreateTeacher(ctx context.Context, user *domain.User, instrumentIDs []int) (*domain.User, error) {
+	tx := r.db.WithContext(ctx).Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 1️⃣ Pastikan user belum ada (by email / phone)
+	var existing domain.User
+	if err := tx.
+		Where("(email = ? OR phone = ?) AND deleted_at IS NULL", user.Email, user.Phone).
+		First(&existing).Error; err == nil {
+		tx.Rollback()
+		return nil, errors.New("email atau nomor telepon sudah digunakan")
+	}
+
+	if len(instrumentIDs) > 0 {
+		// 6a. Validasi: Pastikan semua instrument IDs ada di database
+		var validInstruments []domain.Instrument
+		if err := tx.
+			Where("id IN ? AND deleted_at IS NULL", instrumentIDs).
+			Find(&validInstruments).Error; err != nil {
+			tx.Rollback()
+			return nil, errors.New("gagal memvalidasi instrumen")
+		}
+
+		// 6b. Cek apakah jumlah instrument yang ditemukan sama dengan yang diminta
+		if len(validInstruments) != len(instrumentIDs) {
+			tx.Rollback()
+
+			// Cari instrument IDs yang tidak valid
+			var foundIDs []int
+			for _, inst := range validInstruments {
+				foundIDs = append(foundIDs, inst.ID)
+			}
+
+			invalidIDs := findMissingIDs(instrumentIDs, foundIDs)
+			return nil, fmt.Errorf("instrumen dengan ID %v tidak ditemukan atau sudah dihapus", invalidIDs)
+		}
+
+	}
+	// 2️⃣ Set StudentProfile ke nil karena ini function khusus buat teacher
+	user.StudentProfile = nil
+
+	// 3️⃣ Buat user baru
+	if err := tx.Create(user).Error; err != nil {
+		tx.Rollback()
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	// 4️⃣ Refresh user untuk dapat UUID (jika belum ada)
+	if user.UUID == "" {
+		if err := tx.
+			Where("email = ? AND deleted_at IS NULL", user.Email).
+			First(user).Error; err != nil {
+			tx.Rollback()
+			return nil, errors.New("gagal mendapatkan UUID user")
+		}
+	}
+
+	// 7️⃣ Preload data lengkap untuk response
+	if err := tx.
+		Preload("TeacherProfile.Instruments", "deleted_at IS NULL"). // ✅ Filter instruments yang aktif
+		Where("uuid = ? AND deleted_at IS NULL", user.UUID).
+		First(user).Error; err != nil {
+		tx.Rollback()
+		return nil, errors.New("gagal memuat data user")
+	}
+
+	// 8️⃣ Commit transaksi
+	if err := tx.Commit().Error; err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	return user, nil
+}
+
+// Helper function untuk mencari IDs yang tidak valid
+func findMissingIDs(requestedIDs, foundIDs []int) []int {
+	foundMap := make(map[int]bool)
+	for _, id := range foundIDs {
+		foundMap[id] = true
+	}
+
+	var missing []int
+	for _, id := range requestedIDs {
+		if !foundMap[id] {
+			missing = append(missing, id)
+		}
+	}
+	return missing
+}
+
+func (r *adminRepo) UpdateTeacher(ctx context.Context, user *domain.User, instrumentIDs []int) error {
+	tx := r.db.WithContext(ctx).Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 1️⃣ Ambil data user (pastikan belum dihapus)
+	var existing domain.User
+	if err := tx.
+		Where("uuid = ? AND deleted_at IS NULL", user.UUID).
+		First(&existing).Error; err != nil {
+		tx.Rollback()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("guru tidak ditemukan")
+		}
+		return errors.New(utils.TranslateDBError(err))
+	}
+
+	// 2️⃣ Update data user
+	if err := tx.Model(&existing).Updates(map[string]interface{}{
+		"name":  user.Name,
+		"email": user.Email,
+		"phone": user.Phone,
+		"image": user.Image,
+	}).Error; err != nil {
+		tx.Rollback()
+		return errors.New(utils.TranslateDBError(err))
+	}
+
+	// 3️⃣ Update TeacherProfile (Bio)
+	if user.TeacherProfile != nil {
+		if err := tx.
+			Model(&domain.TeacherProfile{}).
+			Where("user_uuid = ? AND deleted_at IS NULL", user.UUID).
+			Update("bio", user.TeacherProfile.Bio).Error; err != nil {
+			tx.Rollback()
+			return errors.New(utils.TranslateDBError(err))
+		}
+	}
+
+	// 4️⃣ Update Instruments (filter yang belum dihapus)
+	var instruments []domain.Instrument
+	if err := tx.
+		Where("id IN ? AND deleted_at IS NULL", instrumentIDs).
+		Find(&instruments).Error; err != nil {
+		tx.Rollback()
+		return errors.New(utils.TranslateDBError(err))
+	}
+
+	if err := tx.
+		Model(&domain.TeacherProfile{UserUUID: user.UUID}).
+		Association("Instruments").
+		Replace(instruments); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 5️⃣ Commit transaksi
+	if err := tx.Commit().Error; err != nil {
+		return errors.New(utils.TranslateDBError(err))
+	}
+
+	return nil
+}
+
+func (r *adminRepo) GetAllTeachers(ctx context.Context) ([]domain.User, error) {
+	var teachers []domain.User
+	if err := r.db.WithContext(ctx).
+		Preload("TeacherProfile.Instruments").
+		Where("role = ? AND deleted_at IS NULL", domain.RoleTeacher).
+		Find(&teachers).Error; err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	return teachers, nil
+}
+
+func (r *adminRepo) GetTeacherByUUID(ctx context.Context, uuid string) (*domain.User, error) {
+	var teacher domain.User
+	if err := r.db.WithContext(ctx).
+		Preload("TeacherProfile.Instruments").
+		Where("uuid = ? AND role = ? AND deleted_at IS NULL", uuid, domain.RoleTeacher).
+		First(&teacher).Error; err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	return &teacher, nil
+}
+
+func (r *adminRepo) DeleteUser(ctx context.Context, uuid string) error {
+	// Soft delete
+	if err := r.db.WithContext(ctx).
+		Where("uuid = ? AND deleted_at IS NULL", uuid).
+		Delete(&domain.User{}).Error; err != nil {
+		return errors.New(utils.TranslateDBError(err))
+	}
+	return nil
 }

@@ -1,9 +1,11 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
+	"github.com/fatih/color"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 )
@@ -45,4 +47,20 @@ func GetAPIHitter(c *gin.Context) string {
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Unauthorized"})
 	}
 	return apiHitter
+}
+
+func PrintDTO(structName string, dto interface{}) {
+	cyan := color.New(color.FgCyan).SprintFunc()
+	yellow := color.New(color.FgYellow).SprintFunc()
+
+	jsonData, err := json.MarshalIndent(dto, "", "  ")
+	if err != nil {
+		fmt.Printf("❌ Error marshaling %s: %v\n", structName, err)
+		return
+	}
+
+	fmt.Printf("%s %s:\n%s\n",
+		cyan("📋"),
+		yellow(structName),
+		string(jsonData))
 }

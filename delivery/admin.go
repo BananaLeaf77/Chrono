@@ -3,6 +3,7 @@ package delivery
 import (
 	"chronosphere/config"
 	"chronosphere/domain"
+	"chronosphere/dto"
 	"chronosphere/middleware"
 	"chronosphere/utils"
 	"net/http"
@@ -24,7 +25,7 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 	{
 		// Teacher
 		admin.POST("/teachers", h.CreateTeacher)
-		admin.PUT("/teachers/modify/:uuid", h.UpdateTeacherProfile)
+		admin.PUT("/teachers/modify/:uuid", h.UpdateTeacher)
 		admin.GET("/teachers", h.GetAllTeachers)
 		admin.GET("/teachers/:uuid", h.GetTeacherByUUID)
 
@@ -54,21 +55,6 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 }
 
 /* ---------- Request DTOs ---------- */
-
-type CreateTeacherRequest struct {
-	Name     string  `json:"name" binding:"required"`
-	Email    string  `json:"email" binding:"required,email"`
-	Phone    string  `json:"phone" binding:"required"`
-	Password string  `json:"password" binding:"required"`
-	Image    *string `json:"image,omitempty"`
-}
-
-type UpdateTeacherProfileRequest struct {
-	UserUUID string  `json:"user_uuid" binding:"required"`
-	Bio      *string `json:"bio,omitempty"`
-	// instruments could be names or ids; keep it simple for now
-}
-
 type CreatePackageRequest struct {
 	Name  string `json:"name" binding:"required"`
 	Quota int    `json:"quota" binding:"required,min=1"`
@@ -94,54 +80,106 @@ type AssignPackageRequest struct {
 
 /* ---------- Handlers ---------- */
 
+// TEACHER MANAGEMENT
 func (h *AdminHandler) CreateTeacher(c *gin.Context) {
-	var req CreateTeacherRequest
-	name := utils.GetAPIHitter(c)
+	var req dto.CreateTeacherRequest // pakai DTO
+	adminName := utils.GetAPIHitter(c)
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(&name, 400, "CreateTeacher - BindJSON", &err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": utils.TranslateValidationError(err)})
+		utils.PrintLogInfo(&adminName, 400, "CreateTeacher - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   utils.TranslateValidationError(err),
+		})
 		return
 	}
 
-	user := &domain.User{
-		Name:     req.Name,
-		Email:    req.Email,
-		Phone:    req.Phone,
-		Password: req.Password,
-		Role:     domain.RoleTeacher,
-		Image:    req.Image,
-	}
+	user := dto.MapCreateTeacherRequestToUser(&req)
 
-	created, err := h.uc.CreateTeacher(c.Request.Context(), user)
+	// ✅ panggil dengan instrumentIDs
+	created, err := h.uc.CreateTeacher(c.Request.Context(), user, req.InstrumentIDs)
 	if err != nil {
-		utils.PrintLogInfo(&name, 500, "CreateTeacher - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		utils.PrintLogInfo(&adminName, 500, "CreateTeacher - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   utils.TranslateDBError(err),
+		})
 		return
 	}
 
-	utils.PrintLogInfo(&name, 201, "CreateTeacher", nil)
-	c.JSON(http.StatusCreated, gin.H{"success": true, "data": created})
+	utils.PrintLogInfo(&adminName, 201, "CreateTeacher", nil)
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"data":    created,
+	})
 }
 
-func (h *AdminHandler) UpdateTeacherProfile(c *gin.Context) {
-	var req domain.User
-	name := utils.GetAPIHitter(c)
+func (h *AdminHandler) UpdateTeacher(c *gin.Context) {
+	uuid := c.Param("uuid") // ambil UUID dari URL
+	var req dto.UpdateTeacherProfileRequest
+	adminName := utils.GetAPIHitter(c)
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(&name, 400, "UpdateTeacherProfile - BindJSON", &err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": utils.TranslateValidationError(err)})
+		utils.PrintLogInfo(&adminName, 400, "UpdateTeacher - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   utils.TranslateValidationError(err),
+		})
 		return
 	}
 
-	if err := h.uc.UpdateTeacher(c.Request.Context(), &req); err != nil {
-		utils.PrintLogInfo(&name, 500, "UpdateTeacherProfile - UseCase", &err)
+	user := dto.MapUpdateTeacherRequestToUser(&req)
+	user.UUID = uuid // assign dari URL, bukan dari JSON
+
+	if err := h.uc.UpdateTeacher(c.Request.Context(), user, req.InstrumentIDs); err != nil {
+		utils.PrintLogInfo(&adminName, 500, "UpdateTeacher - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   utils.TranslateDBError(err),
+		})
+		return
+	}
+
+	utils.PrintLogInfo(&adminName, 200, "UpdateTeacher", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Teacher profile updated",
+	})
+}
+
+func (h *AdminHandler) GetAllTeachers(c *gin.Context) {
+	teachers, err := h.uc.GetAllTeachers(c.Request.Context())
+	if err != nil {
+		utils.PrintLogInfo(nil, 500, "GetAllTeachers - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	utils.PrintLogInfo(nil, 200, "GetAllTeachers", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": teachers})
+}
+
+func (h *AdminHandler) GetTeacherByUUID(c *gin.Context) {
+	uuid := c.Param("uuid")
+	teacher, err := h.uc.GetTeacherByUUID(c.Request.Context(), uuid)
+	if err != nil {
+		utils.PrintLogInfo(&uuid, 500, "GetTeacherByUUID - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	utils.PrintLogInfo(&name, 200, "UpdateTeacherProfile", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Teacher profile updated"})
+	utils.PrintLogInfo(&uuid, 200, "GetTeacherByUUID", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": teacher})
+}
+
+func (h *AdminHandler) DeleteUser(c *gin.Context) {
+	uuid := c.Param("uuid")
+	if err := h.uc.DeleteUser(c.Request.Context(), uuid); err != nil {
+		utils.PrintLogInfo(&uuid, 500, "DeleteUser - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	utils.PrintLogInfo(&uuid, 200, "DeleteUser", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User deleted"})
 }
 
 func (h *AdminHandler) AssignPackageToStudent(c *gin.Context) {
@@ -336,17 +374,6 @@ func (h *AdminHandler) GetAllUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": users})
 }
 
-func (h *AdminHandler) GetAllTeachers(c *gin.Context) {
-	teachers, err := h.uc.GetAllTeachers(c.Request.Context())
-	if err != nil {
-		utils.PrintLogInfo(nil, 500, "GetAllTeachers - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	utils.PrintLogInfo(nil, 200, "GetAllTeachers", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": teachers})
-}
-
 func (h *AdminHandler) GetAllStudents(c *gin.Context) {
 	students, err := h.uc.GetAllStudents(c.Request.Context())
 	if err != nil {
@@ -368,28 +395,4 @@ func (h *AdminHandler) GetStudentByUUID(c *gin.Context) {
 	}
 	utils.PrintLogInfo(&uuid, 200, "GetStudentByUUID", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": student})
-}
-
-func (h *AdminHandler) GetTeacherByUUID(c *gin.Context) {
-	uuid := c.Param("uuid")
-	teacher, err := h.uc.GetTeacherByUUID(c.Request.Context(), uuid)
-	if err != nil {
-		utils.PrintLogInfo(&uuid, 500, "GetTeacherByUUID - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-
-	utils.PrintLogInfo(&uuid, 200, "GetTeacherByUUID", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": teacher})
-}
-
-func (h *AdminHandler) DeleteUser(c *gin.Context) {
-	uuid := c.Param("uuid")
-	if err := h.uc.DeleteUser(c.Request.Context(), uuid); err != nil {
-		utils.PrintLogInfo(&uuid, 500, "DeleteUser - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	utils.PrintLogInfo(&uuid, 200, "DeleteUser", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User deleted"})
 }
