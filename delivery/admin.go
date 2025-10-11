@@ -129,6 +129,7 @@ func (h *AdminHandler) UpdateTeacher(c *gin.Context) {
 	}
 
 	user := dto.MapUpdateTeacherRequestToUser(&req)
+	utils.PrintDTO("user to update", user)
 	user.UUID = uuid // assign dari URL, bukan dari JSON
 
 	if err := h.uc.UpdateTeacher(c.Request.Context(), user, req.InstrumentIDs); err != nil {

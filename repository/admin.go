@@ -262,6 +262,7 @@ func findMissingIDs(requestedIDs, foundIDs []int) []int {
 }
 
 func (r *adminRepo) UpdateTeacher(ctx context.Context, user *domain.User, instrumentIDs []int) error {
+	// Mulai transaction
 	tx := r.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -269,60 +270,132 @@ func (r *adminRepo) UpdateTeacher(ctx context.Context, user *domain.User, instru
 		}
 	}()
 
-	// 1️⃣ Ambil data user (pastikan belum dihapus)
-	var existing domain.User
-	if err := tx.
-		Where("uuid = ? AND deleted_at IS NULL", user.UUID).
-		First(&existing).Error; err != nil {
+	// Cek apakah user exists dan belum dihapus
+	var existingUser domain.User
+	err := tx.Where("uuid = ? AND deleted_at IS NULL", user.UUID).First(&existingUser).Error
+	if err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("guru tidak ditemukan")
 		}
-		return errors.New(utils.TranslateDBError(err))
+		return fmt.Errorf("error mencari guru: %w", err)
 	}
 
-	// 2️⃣ Update data user
-	if err := tx.Model(&existing).Updates(map[string]interface{}{
-		"name":  user.Name,
-		"email": user.Email,
-		"phone": user.Phone,
-		"image": user.Image,
-	}).Error; err != nil {
+	// Check email duplicate dengan user lain
+	var emailCount int64
+	err = tx.Model(&domain.User{}).
+		Where("email = ? AND uuid != ? AND deleted_at IS NULL", user.Email, user.UUID).
+		Count(&emailCount).Error
+	if err != nil {
 		tx.Rollback()
-		return errors.New(utils.TranslateDBError(err))
+		return fmt.Errorf("error checking email: %w", err)
+	}
+	if emailCount > 0 {
+		tx.Rollback()
+		return errors.New("email sudah digunakan oleh user lain")
 	}
 
-	// 3️⃣ Update TeacherProfile (Bio)
-	if user.TeacherProfile != nil {
-		if err := tx.
-			Model(&domain.TeacherProfile{}).
-			Where("user_uuid = ? AND deleted_at IS NULL", user.UUID).
-			Update("bio", user.TeacherProfile.Bio).Error; err != nil {
+	// Check phone duplicate dengan user lain
+	var phoneCount int64
+	err = tx.Model(&domain.User{}).
+		Where("phone = ? AND uuid != ? AND deleted_at IS NULL", user.Phone, user.UUID).
+		Count(&phoneCount).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error checking phone: %w", err)
+	}
+	if phoneCount > 0 {
+		tx.Rollback()
+		return errors.New("nomor telepon sudah digunakan oleh user lain")
+	}
+
+	// Check instruments exist
+	if len(instrumentIDs) > 0 {
+		var instrumentCount int64
+		err = tx.Model(&domain.Instrument{}).
+			Where("id IN ? AND deleted_at IS NULL", instrumentIDs).
+			Count(&instrumentCount).Error
+
+		if err != nil {
 			tx.Rollback()
-			return errors.New(utils.TranslateDBError(err))
+			return fmt.Errorf("error checking instruments: %w", err)
+		}
+
+		if instrumentCount != int64(len(instrumentIDs)) {
+			tx.Rollback()
+			return errors.New("salah satu atau lebih instrumen tidak ditemukan")
 		}
 	}
 
-	// 4️⃣ Update Instruments (filter yang belum dihapus)
-	var instruments []domain.Instrument
-	if err := tx.
-		Where("id IN ? AND deleted_at IS NULL", instrumentIDs).
-		Find(&instruments).Error; err != nil {
+	// Update user data
+	err = tx.Model(&domain.User{}).
+		Where("uuid = ?", user.UUID).
+		Updates(user).Error
+	if err != nil {
 		tx.Rollback()
-		return errors.New(utils.TranslateDBError(err))
+		return fmt.Errorf("gagal memperbarui data guru: %w", err)
 	}
 
-	if err := tx.
-		Model(&domain.TeacherProfile{UserUUID: user.UUID}).
-		Association("Instruments").
-		Replace(instruments); err != nil {
-		tx.Rollback()
-		return err
+	// Update TeacherProfile bio jika ada
+	if user.TeacherProfile != nil {
+		// Cek apakah teacher profile sudah ada atau perlu dibuat baru
+		var profileCount int64
+		err = tx.Model(&domain.TeacherProfile{}).
+			Where("user_uuid = ?", user.UUID).
+			Count(&profileCount).Error
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("error checking teacher profile: %w", err)
+		}
+
+		if profileCount > 0 {
+			// Update existing profile
+			err = tx.Model(&domain.TeacherProfile{}).
+				Where("user_uuid = ?", user.UUID).
+				Update("bio", user.TeacherProfile.Bio).Error
+		} else {
+			// Create new profile
+			err = tx.Create(&domain.TeacherProfile{
+				UserUUID: user.UUID,
+				Bio:      user.TeacherProfile.Bio,
+			}).Error
+		}
+
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal memperbarui profil guru: %w", err)
+		}
+
+		// Update many-to-many relationship untuk instruments
+		if len(instrumentIDs) > 0 {
+			// Hapus associations yang lama
+			err = tx.Model(&domain.TeacherProfile{UserUUID: user.UUID}).
+				Association("Instruments").
+				Clear()
+			if err != nil {
+				tx.Rollback()
+				return fmt.Errorf("gagal menghapus instrumen lama: %w", err)
+			}
+
+			// Tambahkan associations yang baru
+			var instruments []domain.Instrument
+			for _, id := range instrumentIDs {
+				instruments = append(instruments, domain.Instrument{ID: id})
+			}
+
+			err = tx.Model(&domain.TeacherProfile{UserUUID: user.UUID}).
+				Association("Instruments").
+				Append(instruments)
+			if err != nil {
+				tx.Rollback()
+				return fmt.Errorf("gagal menambahkan instrumen baru: %w", err)
+			}
+		}
 	}
 
-	// 5️⃣ Commit transaksi
+	// Commit transaction jika semua berhasil
 	if err := tx.Commit().Error; err != nil {
-		return errors.New(utils.TranslateDBError(err))
+		return fmt.Errorf("gagal commit transaction: %w", err)
 	}
 
 	return nil
