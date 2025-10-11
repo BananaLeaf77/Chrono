@@ -42,10 +42,27 @@ func (r *adminRepo) UpdateInstrument(ctx context.Context, instrument *domain.Ins
 }
 
 func (r *adminRepo) UpdatePackage(ctx context.Context, pkg *domain.Package) error {
-	err := r.db.WithContext(ctx).Model(&domain.Package{}).Where("id = ?", pkg.ID).Updates(pkg).Error
-	if err != nil {
-		return err
+
+	//check the name
+	var existing domain.Package
+	if err := r.db.WithContext(ctx).
+		Where("id = ? AND deleted_at IS NULL", pkg.ID).
+		First(&existing).Error; err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("paket tidak ditemukan")
+		}
+		return errors.New(utils.TranslateDBError(err))
 	}
+
+	//check the name
+	err := r.db.WithContext(ctx).Model(&domain.Package{}).Where("name = ? AND id != ? AND deleted_at IS NULL", pkg.Name, pkg.ID).First(&domain.Package{}).Error
+	if err == nil {
+		return errors.New("nama paket sudah digunakan")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return errors.New(utils.TranslateDBError(err))
+	}
+
 	return nil
 }
 
@@ -67,8 +84,29 @@ func (r *adminRepo) AssignPackageToStudent(ctx context.Context, studentUUID stri
 
 // CreatePackage inserts a new package
 func (r *adminRepo) CreatePackage(ctx context.Context, pkg *domain.Package) (*domain.Package, error) {
-	err := r.db.WithContext(ctx).Create(pkg).Error
-	return pkg, err
+	err := r.db.WithContext(ctx).Where("name = ? AND deleted_at IS NULL", pkg.Name).First(&domain.Package{}).Error
+	if err == nil {
+		return nil, errors.New("nama paket sudah digunakan")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	//check instrument id exists
+	var instrumentCount int64
+	err = r.db.WithContext(ctx).Model(&domain.Instrument{}).
+		Where("id = ? AND deleted_at IS NULL", pkg.InstrumentID).
+		Count(&instrumentCount).Error
+	if err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+	if instrumentCount == 0 {
+		return nil, errors.New("instrumen tidak ditemukan")
+	}
+
+	if err := r.db.WithContext(ctx).Create(pkg).Error; err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+	return pkg, nil
 }
 
 // ✅ Create Instrument
@@ -96,8 +134,14 @@ func (r *adminRepo) CreateInstrument(ctx context.Context, instrument *domain.Ins
 // GetAllPackages returns all packages
 func (r *adminRepo) GetAllPackages(ctx context.Context) ([]domain.Package, error) {
 	var packages []domain.Package
-	err := r.db.WithContext(ctx).Find(&packages).Error
-	return packages, err
+	if err := r.db.WithContext(ctx).
+		Where("deleted_at IS NULL").
+		Preload("Instrument", "deleted_at IS NULL"). // ✅ Preload instrument yang aktif
+		Find(&packages).Error; err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	return packages, nil
 }
 
 // ✅ Get All Instruments (skip soft deleted)
@@ -494,9 +538,11 @@ func (r *adminRepo) DeleteUser(ctx context.Context, uuid string) error {
 
 func (r *adminRepo) GetPackagesByID(ctx context.Context, id int) (*domain.Package, error) {
 	var pkg domain.Package
-	err := r.db.WithContext(ctx).First(&pkg, id).Error
+	err := r.db.WithContext(ctx).Preload("Instrument", "deleted_at IS NULL").First(&pkg, id).Error
+
 	if err != nil {
 		return nil, err
 	}
+
 	return &pkg, nil
 }

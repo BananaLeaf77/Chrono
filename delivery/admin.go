@@ -67,7 +67,7 @@ type UpdatePackageRequest struct {
 	Name         *string `json:"name,omitempty" binding:"omitempty,min=3,max=50"`
 	Quota        *int    `json:"quota,omitempty" binding:"omitempty,gt=0"`
 	Description  *string `json:"description,omitempty"`
-	InstrumentID *int    `json:"instrument_id,omitempty" binding:"omitempty,gt=0"`
+	InstrumentID *int    `json:"instrument_id,omitempty" binding:"required,gt=0"`
 }
 
 type CreateInstrumentRequest struct {
@@ -116,8 +116,10 @@ func (h *AdminHandler) CreatePackage(c *gin.Context) {
 	}
 
 	pkg := &domain.Package{
-		Name:  req.Name,
-		Quota: req.Quota,
+		Name:         req.Name,
+		Quota:        req.Quota,
+		Description:  *req.Description,
+		InstrumentID: req.InstrumentID,
 	}
 
 	created, err := h.uc.CreatePackage(c.Request.Context(), pkg)
