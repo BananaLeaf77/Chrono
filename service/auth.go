@@ -35,6 +35,16 @@ func NewAuthService(userRepo domain.UserRepository, otpRepo domain.OTPRepository
 	}
 }
 
+func (s *authService) Me(ctx context.Context, userUUID string) (*domain.User, error) {
+	user, err := s.userRepo.GetUserByUUID(ctx, userUUID)
+	if err != nil {
+		return nil, err
+	}
+	// Hapus password sebelum mengembalikan data user
+	user.Password = ""
+	return user, nil
+}
+
 func (s *authService) ResendOTP(ctx context.Context, email string) error {
 	// cek apakah OTP lama ada
 	data, err := s.otpRepo.GetOTP(ctx, email)

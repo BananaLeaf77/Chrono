@@ -20,7 +20,7 @@ func NewJWTManager(secretKey string, duration time.Duration) *JWTManager {
 	}
 }
 
-// GenerateToken membuat JWT token dengan payload userUUID dan role
+
 func (j *JWTManager) GenerateToken(userUUID string, role, name string) (string, error) {
 	claims := jwt.MapClaims{
 		"sub":  userUUID,

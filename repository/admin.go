@@ -426,11 +426,77 @@ func (r *adminRepo) GetTeacherByUUID(ctx context.Context, uuid string) (*domain.
 }
 
 func (r *adminRepo) DeleteUser(ctx context.Context, uuid string) error {
-	// Soft delete
-	if err := r.db.WithContext(ctx).
-		Where("uuid = ? AND deleted_at IS NULL", uuid).
-		Delete(&domain.User{}).Error; err != nil {
-		return errors.New(utils.TranslateDBError(err))
+	// Mulai transaction
+	tx := r.db.WithContext(ctx).Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Cek apakah user exists dan belum dihapus
+	var user domain.User
+	err := tx.Where("uuid = ? AND deleted_at IS NULL", uuid).First(&user).Error
+	if err != nil {
+		tx.Rollback()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("user tidak ditemukan")
+		}
+		return fmt.Errorf("error mencari user: %w", err)
 	}
+
+	// Jika user adalah teacher, hapus teacher profile terlebih dahulu
+	if user.Role == "teacher" {
+		// Hapus associations many-to-many terlebih dahulu
+		err = tx.Model(&domain.TeacherProfile{UserUUID: uuid}).
+			Association("Instruments").
+			Clear()
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal menghapus associations instrumen: %w", err)
+		}
+
+		// Hapus teacher profile
+		err = tx.Where("user_uuid = ?", uuid).
+			Delete(&domain.TeacherProfile{}).Error
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal menghapus teacher profile: %w", err)
+		}
+	}
+
+	// Jika user adalah student, hapus student profile (jika ada)
+	if user.Role == "student" {
+		err = tx.Where("user_uuid = ?", uuid).
+			Delete(&domain.StudentProfile{}).Error
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal menghapus student profile: %w", err)
+		}
+	}
+
+	// Soft delete user
+	err = tx.Model(&domain.User{}).
+		Where("uuid = ?", uuid).
+		Update("deleted_at", time.Now()).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal menghapus user: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("gagal commit transaction: %w", err)
+	}
+
 	return nil
+}
+
+func (r *adminRepo) GetPackagesByID(ctx context.Context, id int) (*domain.Package, error) {
+	var pkg domain.Package
+	err := r.db.WithContext(ctx).First(&pkg, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &pkg, nil
 }

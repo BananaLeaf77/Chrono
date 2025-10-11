@@ -4,6 +4,7 @@ import (
 	"chronosphere/config"
 	"chronosphere/domain"
 	"chronosphere/utils"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -31,12 +32,54 @@ func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase) {
 	protected := r.Group("/auth")
 	protected.Use(config.AuthMiddleware(handler.authUC.GetAccessTokenManager()))
 	{
+		protected.GET("/me", handler.Me)
 		protected.POST("/change-password", handler.ChangePassword)
 	}
 }
 
 type ResendOTPRequest struct {
 	Email string `json:"email" binding:"required,email"`
+}
+
+func (h *AuthHandler) Me(c *gin.Context) {
+	uuidVal, existsUUID := c.Get("userUUID")
+	roleVal, existsRole := c.Get("role")
+	fmt.Println("userUUID:", uuidVal, "exists:", existsUUID)
+	fmt.Println("role:", roleVal, "exists:", existsRole)
+
+	if !existsUUID || !existsRole {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Unauthorized: missing user context",
+		})
+		return
+	}
+
+	userUUID, ok := uuidVal.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Invalid user UUID type",
+		})
+		return
+	}
+
+	role, _ := roleVal.(string)
+
+	user, err := h.authUC.Me(c.Request.Context(), userUUID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"role":    role,
+		"data":    user,
+	})
 }
 
 func (h *AuthHandler) ResendOTP(c *gin.Context) {

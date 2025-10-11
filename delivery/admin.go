@@ -40,6 +40,7 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 		// Packages
 		admin.POST("/packages", h.CreatePackage)
 		admin.PUT("/packages/modify/:id", h.UpdatePackage)
+		admin.GET("/packages/:id", h.GetPackagesByID) // NOTE: get all packages, not by id
 		admin.DELETE("/packages/:id", h.DeletePackage)
 		admin.GET("/packages", h.GetAllPackages)
 
@@ -55,14 +56,18 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 }
 
 /* ---------- Request DTOs ---------- */
-type CreatePackageRequest struct {
-	Name  string `json:"name" binding:"required"`
-	Quota int    `json:"quota" binding:"required,min=1"`
-}
 
+type CreatePackageRequest struct {
+	Name         string  `json:"name" binding:"required,min=3,max=50"`
+	Quota        int     `json:"quota" binding:"required,gt=0"`
+	Description  *string `json:"description,omitempty"`
+	InstrumentID int     `json:"instrument_id" binding:"required,gt=0"`
+}
 type UpdatePackageRequest struct {
-	Name  *string `json:"name,omitempty"`
-	Quota *int    `json:"quota,omitempty"`
+	Name         *string `json:"name,omitempty" binding:"omitempty,min=3,max=50"`
+	Quota        *int    `json:"quota,omitempty" binding:"omitempty,gt=0"`
+	Description  *string `json:"description,omitempty"`
+	InstrumentID *int    `json:"instrument_id,omitempty" binding:"omitempty,gt=0"`
 }
 
 type CreateInstrumentRequest struct {
@@ -79,8 +84,129 @@ type AssignPackageRequest struct {
 }
 
 /* ---------- Handlers ---------- */
+// PACKAGE MANAGEMENT ======================================================================================================
+func (h *AdminHandler) GetPackagesByID(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		utils.PrintLogInfo(&idStr, 400, "GetPackagesByID - Atoi", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid package ID"})
+		return
+	}
 
-// TEACHER MANAGEMENT
+	pkg, err := h.uc.GetPackagesByID(c.Request.Context(), id)
+	if err != nil {
+		utils.PrintLogInfo(&idStr, 500, "GetPackagesByID - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	utils.PrintLogInfo(&idStr, 200, "GetPackagesByID", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": pkg})
+}
+
+func (h *AdminHandler) CreatePackage(c *gin.Context) {
+	var req CreatePackageRequest
+	name := utils.GetAPIHitter(c)
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.PrintLogInfo(&name, 400, "CreatePackage - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to create package", "success": false, "error": utils.TranslateValidationError(err)})
+		return
+	}
+
+	pkg := &domain.Package{
+		Name:  req.Name,
+		Quota: req.Quota,
+	}
+
+	created, err := h.uc.CreatePackage(c.Request.Context(), pkg)
+	if err != nil {
+		utils.PrintLogInfo(&name, 500, "CreatePackage - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create package", "success": false, "error": utils.TranslateDBError(err)})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 201, "CreatePackage", nil)
+	c.JSON(http.StatusCreated, gin.H{"message": "Package created successfully", "success": true, "data": created})
+}
+
+func (h *AdminHandler) UpdatePackage(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		utils.PrintLogInfo(&name, 400, "UpdatePackage - Atoi", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to update package", "success": false, "error": "Invalid package ID"})
+		return
+	}
+
+	var req UpdatePackageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.PrintLogInfo(&name, 400, "UpdatePackage - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to update package", "success": false, "error": utils.TranslateValidationError(err)})
+		return
+	}
+
+	pkg := &domain.Package{ID: id}
+	if req.Name != nil {
+		pkg.Name = *req.Name
+	}
+	if req.Quota != nil {
+		pkg.Quota = *req.Quota
+	}
+
+	if err := h.uc.UpdatePackage(c.Request.Context(), pkg); err != nil {
+		utils.PrintLogInfo(&name, 500, "UpdatePackage - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update package", "success": false, "error": utils.TranslateDBError(err)})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "UpdatePackage", nil)
+	c.JSON(http.StatusOK, gin.H{"message": "Package updated successfully", "success": true})
+}
+
+func (h *AdminHandler) DeletePackage(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		utils.PrintLogInfo(&name, 400, "DeletePackage - Atoi", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to delete package", "success": false, "error": "Invalid package ID"})
+		return
+	}
+
+	if err := h.uc.DeletePackage(c.Request.Context(), id); err != nil {
+		utils.PrintLogInfo(&name, 500, "DeletePackage - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to delete package", "success": false, "error": utils.TranslateDBError(err)})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "DeletePackage", nil)
+	c.JSON(http.StatusOK, gin.H{"message": "Package deleted successfully", "success": true})
+}
+
+func (h *AdminHandler) AssignPackageToStudent(c *gin.Context) {
+	var req AssignPackageRequest
+	name := utils.GetAPIHitter(c)
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.PrintLogInfo(&name, 400, "AssignPackageToStudent - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to assign package", "success": false, "error": utils.TranslateValidationError(err)})
+		return
+	}
+
+	if err := h.uc.AssignPackageToStudent(c.Request.Context(), req.StudentUUID, req.PackageID); err != nil {
+		utils.PrintLogInfo(&name, 500, "AssignPackageToStudent - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to assign package", "success": false, "error": utils.TranslateDBError(err)})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "AssignPackageToStudent", nil)
+	c.JSON(http.StatusOK, gin.H{"message": "Package assigned to student successfully", "success": true})
+}
+
+// TEACHER MANAGEMENT =====================================================================================================
 func (h *AdminHandler) CreateTeacher(c *gin.Context) {
 	var req dto.CreateTeacherRequest // pakai DTO
 	adminName := utils.GetAPIHitter(c)
@@ -180,91 +306,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 	utils.PrintLogInfo(&uuid, 200, "DeleteUser", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User deleted"})
-}
-
-func (h *AdminHandler) AssignPackageToStudent(c *gin.Context) {
-	var req AssignPackageRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(nil, 400, "AssignPackageToStudent - BindJSON", &err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-
-	if err := h.uc.AssignPackageToStudent(c.Request.Context(), req.StudentUUID, req.PackageID); err != nil {
-		utils.PrintLogInfo(&req.StudentUUID, 500, "AssignPackageToStudent - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-
-	utils.PrintLogInfo(&req.StudentUUID, 200, "AssignPackageToStudent", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Package assigned to student"})
-}
-
-func (h *AdminHandler) CreatePackage(c *gin.Context) {
-	var req CreatePackageRequest
-	name := utils.GetAPIHitter(c)
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(&name, 400, "CreatePackage - BindJSON", &err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": utils.TranslateValidationError(err)})
-		return
-	}
-
-	pkg := &domain.Package{
-		Name:  req.Name,
-		Quota: req.Quota,
-	}
-
-	created, err := h.uc.CreatePackage(c.Request.Context(), pkg)
-	if err != nil {
-		utils.PrintLogInfo(&name, 500, "CreatePackage - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	utils.PrintLogInfo(&name, 201, "CreatePackage", nil)
-	c.JSON(http.StatusCreated, gin.H{"success": true, "data": created})
-}
-
-func (h *AdminHandler) UpdatePackage(c *gin.Context) {
-	idStr := c.Param("id")
-	id, _ := strconv.Atoi(idStr)
-
-	var req UpdatePackageRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(&idStr, 400, "UpdatePackage - BindJSON", &err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-
-	// Get existing package object to update fields (you can also accept full pkg)
-	pkg := &domain.Package{ID: id}
-	if req.Name != nil {
-		pkg.Name = *req.Name
-	}
-	if req.Quota != nil {
-		pkg.Quota = *req.Quota
-	}
-
-	if err := h.uc.UpdatePackage(c.Request.Context(), pkg); err != nil {
-		utils.PrintLogInfo(&idStr, 500, "UpdatePackage - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-
-	utils.PrintLogInfo(&idStr, 200, "UpdatePackage", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Package updated"})
-}
-
-func (h *AdminHandler) DeletePackage(c *gin.Context) {
-	idStr := c.Param("id")
-	id, _ := strconv.Atoi(idStr)
-	if err := h.uc.DeletePackage(c.Request.Context(), id); err != nil {
-		utils.PrintLogInfo(&idStr, 500, "DeletePackage - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	utils.PrintLogInfo(&idStr, 200, "DeletePackage", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Package deleted"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User deleted successfully"})
 }
 
 func (h *AdminHandler) CreateInstrument(c *gin.Context) {

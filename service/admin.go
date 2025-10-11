@@ -19,6 +19,13 @@ func NewAdminService(adminRepo domain.AdminRepository) domain.AdminUseCase {
 	}
 }
 
+func (s *adminService) GetPackagesByID(ctx context.Context, id int) (*domain.Package, error) {
+	if id <= 0 {
+		return nil, errors.New("invalid package id")
+	}
+	return s.adminRepo.GetPackagesByID(ctx, id)
+}
+
 // AssignPackageToStudent assigns a package to a student
 func (s *adminService) AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error {
 	if studentUUID == "" {

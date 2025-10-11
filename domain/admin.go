@@ -8,6 +8,7 @@ type AdminUseCase interface {
 
 	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
 
+	GetPackagesByID(ctx context.Context, id int) (*Package, error)
 	CreatePackage(ctx context.Context, pkg *Package) (*Package, error)
 	UpdatePackage(ctx context.Context, pkg *Package) error
 	DeletePackage(ctx context.Context, id int) error
@@ -34,6 +35,7 @@ type AdminRepository interface {
 
 	AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error
 
+	GetPackagesByID(ctx context.Context, id int) (*Package, error)
 	CreatePackage(ctx context.Context, pkg *Package) (*Package, error)
 	UpdatePackage(ctx context.Context, pkg *Package) error
 	DeletePackage(ctx context.Context, id int) error

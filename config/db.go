@@ -58,13 +58,25 @@ func BootDB() (*gorm.DB, *string, error) {
 
 	// Auto migrate semua schema
 	err = db.AutoMigrate(
+		// Base entities first
 		&domain.User{},
-		&domain.OTP{},
-		&domain.TeacherProfile{},
 		&domain.Instrument{},
+
+		// Profiles (depend on User)
+		&domain.TeacherProfile{},
 		&domain.StudentProfile{},
+
+		// Package related tables (depend on Instrument)
 		&domain.Package{},
 		&domain.StudentPackage{},
+
+		// Schedule and booking (depend on User)
+		&domain.TeacherSchedule{},
+		&domain.Booking{},
+
+		// Class and documentation (depend on Booking, User, Package, Instrument)
+		&domain.ClassHistory{},
+		&domain.ClassDocumentation{},
 	)
 	if err != nil {
 		log.Fatal("❌ Failed to ", utils.ColorText("auto-migrate database schemas", utils.Red), " error: ", err)
