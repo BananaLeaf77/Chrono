@@ -88,56 +88,78 @@ func (r *adminRepo) UpdatePackage(ctx context.Context, pkg *domain.Package) erro
 }
 
 // AssignPackageToStudent assigns a package to a student
+// AssignPackageToStudent assigns a package to a student
 func (r *adminRepo) AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error {
-	// 1. Cek apakah student exists dan belum dihapus
+	tx := r.db.WithContext(ctx).Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 1️⃣ Check student existence
 	var student domain.User
-	err := r.db.WithContext(ctx).Where("uuid = ? AND role = ? AND deleted_at IS NULL", studentUUID, domain.RoleStudent).First(&student).Error
-	if err != nil {
+	if err := tx.Where("uuid = ? AND role = ? AND deleted_at IS NULL", studentUUID, domain.RoleStudent).First(&student).Error; err != nil {
+		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("siswa tidak ditemukan")
 		}
 		return errors.New(utils.TranslateDBError(err))
 	}
 
-	// 2. Cek apakah package exists dan belum dihapus
+	// 2️⃣ Check package existence
 	var pkg domain.Package
-	err = r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", packageID).First(&pkg).Error
-	if err != nil {
+	if err := tx.Where("id = ? AND deleted_at IS NULL", packageID).First(&pkg).Error; err != nil {
+		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("paket tidak ditemukan")
 		}
 		return errors.New(utils.TranslateDBError(err))
 	}
 
-	// 3. Cek apakah student sudah memiliki student profile, jika belum buat baru
+	// 3️⃣ Ensure student profile exists
 	var studentProfile domain.StudentProfile
-	err = r.db.WithContext(ctx).Where("user_uuid = ?", studentUUID).First(&studentProfile).Error
-	if err != nil {
+	if err := tx.Where("user_uuid = ?", studentUUID).First(&studentProfile).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Buat student profile baru
-			studentProfile = domain.StudentProfile{
-				UserUUID: studentUUID,
-			}
-			if err := r.db.WithContext(ctx).Create(&studentProfile).Error; err != nil {
+			studentProfile = domain.StudentProfile{UserUUID: studentUUID}
+			if err := tx.Create(&studentProfile).Error; err != nil {
+				tx.Rollback()
 				return errors.New(utils.TranslateDBError(err))
 			}
 		} else {
+			tx.Rollback()
 			return errors.New(utils.TranslateDBError(err))
 		}
 	}
 
-	// 4. Assign package ke student dengan membuat entri di student_packages
-	studentPackage := domain.StudentPackage{
-		StudentUUID:    studentUUID,
-		PackageID:      packageID,
-		RemainingQuota: pkg.Quota, // Set initial quota sesuai paket
-		StartDate:      time.Now(),
-		EndDate:        time.Now().AddDate(0, 1, 0), // Contoh: paket berlaku 1 bulan
+	// 4️⃣ Check if student already has this package active
+	var existing domain.StudentPackage
+	if err := tx.Where(`
+		student_uuid = ? 
+		AND package_id = ? 
+		AND end_date > ? 
+		AND remaining_quota > 0`,
+		studentUUID, packageID, time.Now()).
+		First(&existing).Error; err == nil {
+		tx.Rollback()
+		return errors.New("siswa sudah memiliki paket ini yang masih aktif")
 	}
 
-	if err := r.db.WithContext(ctx).Create(&studentPackage).Error; err != nil {
+	// 5️⃣ Assign new package
+	newSub := domain.StudentPackage{
+		StudentUUID:    studentUUID,
+		PackageID:      packageID,
+		RemainingQuota: pkg.Quota,
+		StartDate:      time.Now(),
+		EndDate:        time.Now().AddDate(0, 1, 0),
+	}
+
+	if err := tx.Create(&newSub).Error; err != nil {
+		tx.Rollback()
 		return errors.New(utils.TranslateDBError(err))
 	}
+
+	tx.Commit()
 	return nil
 }
 
@@ -532,7 +554,6 @@ func (r *adminRepo) GetTeacherByUUID(ctx context.Context, uuid string) (*domain.
 }
 
 func (r *adminRepo) DeleteUser(ctx context.Context, uuid string) error {
-	// Mulai transaction
 	tx := r.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -540,59 +561,64 @@ func (r *adminRepo) DeleteUser(ctx context.Context, uuid string) error {
 		}
 	}()
 
-	// Cek apakah user exists dan belum dihapus
+	// 1️⃣ Check if user exists
 	var user domain.User
-	err := tx.Where("uuid = ? AND deleted_at IS NULL", uuid).First(&user).Error
-	if err != nil {
+	if err := tx.
+		Where("uuid = ? AND deleted_at IS NULL", uuid).
+		First(&user).Error; err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("user tidak ditemukan")
 		}
-		return fmt.Errorf("error mencari user: %w", err)
+		return fmt.Errorf("gagal mencari user: %w", err)
 	}
 
-	// Jika user adalah teacher, hapus teacher profile terlebih dahulu
-	if user.Role == "teacher" {
-		// Hapus associations many-to-many terlebih dahulu
-		err = tx.Model(&domain.TeacherProfile{UserUUID: uuid}).
+	// 2️⃣ Delete TEACHER-related data
+	if user.Role == domain.RoleTeacher {
+		// Clear many-to-many relation (teacher_instruments)
+		if err := tx.Model(&domain.TeacherProfile{UserUUID: uuid}).
 			Association("Instruments").
-			Clear()
-		if err != nil {
+			Clear(); err != nil {
 			tx.Rollback()
-			return fmt.Errorf("gagal menghapus associations instrumen: %w", err)
+			return fmt.Errorf("gagal menghapus relasi instrumen guru: %w", err)
 		}
 
-		// Hapus teacher profile
-		err = tx.Where("user_uuid = ?", uuid).
-			Delete(&domain.TeacherProfile{}).Error
-		if err != nil {
+		// Delete teacher profile
+		if err := tx.Where("user_uuid = ?", uuid).
+			Delete(&domain.TeacherProfile{}).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("gagal menghapus teacher profile: %w", err)
+			return fmt.Errorf("gagal menghapus profil guru: %w", err)
 		}
 	}
 
-	// Jika user adalah student, hapus student profile (jika ada)
-	if user.Role == "student" {
-		err = tx.Where("user_uuid = ?", uuid).
-			Delete(&domain.StudentProfile{}).Error
-		if err != nil {
+	// 3️⃣ Delete STUDENT-related data
+	if user.Role == domain.RoleStudent {
+		// Delete packages first (to avoid FK violation)
+		if err := tx.Where("student_uuid = ?", uuid).
+			Delete(&domain.StudentPackage{}).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("gagal menghapus student profile: %w", err)
+			return fmt.Errorf("gagal menghapus paket siswa: %w", err)
+		}
+
+		// Then delete student profile
+		if err := tx.Where("user_uuid = ?", uuid).
+			Delete(&domain.StudentProfile{}).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal menghapus profil siswa: %w", err)
 		}
 	}
 
-	// Soft delete user
-	err = tx.Model(&domain.User{}).
+	// 4️⃣ Soft delete user
+	if err := tx.Model(&domain.User{}).
 		Where("uuid = ?", uuid).
-		Update("deleted_at", time.Now()).Error
-	if err != nil {
+		Update("deleted_at", time.Now()).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("gagal menghapus user: %w", err)
 	}
 
-	// Commit transaction
+	// 5️⃣ Commit transaction
 	if err := tx.Commit().Error; err != nil {
-		return fmt.Errorf("gagal commit transaction: %w", err)
+		return fmt.Errorf("gagal commit transaksi: %w", err)
 	}
 
 	return nil

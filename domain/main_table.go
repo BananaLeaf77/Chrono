@@ -26,8 +26,8 @@ type User struct {
 }
 
 type StudentProfile struct {
-	UserUUID string           `gorm:"primaryKey;type:uuid" json:"user_uuid"`
-	Packages []StudentPackage `gorm:"foreignKey:StudentUUID" json:"packages"`
+	UserUUID string           `gorm:"primaryKey;type:uuid;constraint:OnDelete:CASCADE;" json:"user_uuid"`
+	Packages []StudentPackage `gorm:"foreignKey:StudentUUID;constraint:OnDelete:CASCADE;" json:"packages"`
 }
 
 type Package struct {
@@ -44,8 +44,8 @@ type Package struct {
 
 type StudentPackage struct {
 	ID             int       `gorm:"primaryKey" json:"id"`
-	StudentUUID    string    `gorm:"type:uuid;not null" json:"student_uuid"`
-	PackageID      int       `gorm:"not null" json:"package_id"`
+	StudentUUID    string    `gorm:"type:uuid;not null;constraint:OnDelete:CASCADE,OnUpdate:CASCADE;" json:"student_uuid"`
+	PackageID      int       `gorm:"not null;constraint:OnDelete:CASCADE,OnUpdate:CASCADE;" json:"package_id"`
 	RemainingQuota int       `gorm:"not null" json:"remaining_quota"`
 	StartDate      time.Time `json:"start_date"`
 	EndDate        time.Time `json:"end_date"`
