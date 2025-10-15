@@ -55,11 +55,32 @@ func (r *adminRepo) UpdatePackage(ctx context.Context, pkg *domain.Package) erro
 		return errors.New(utils.TranslateDBError(err))
 	}
 
+	utils.PrintDTO("packages coming", pkg)
+
 	//check the name
-	err := r.db.WithContext(ctx).Model(&domain.Package{}).Where("name = ? AND id != ? AND deleted_at IS NULL", pkg.Name, pkg.ID).First(&domain.Package{}).Error
+	var nameExistStruct domain.Package
+	err := r.db.WithContext(ctx).Model(&domain.Package{}).Where("name = ? AND id != ? AND deleted_at IS NULL", pkg.Name, pkg.ID).First(&nameExistStruct).Error
 	if err == nil {
+		utils.PrintDTO("hasilfetch", nameExistStruct)
+
 		return errors.New("nama paket sudah digunakan")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return errors.New(utils.TranslateDBError(err))
+	}
+
+	// check instrument id exists
+	var instrumentCount int64
+	err = r.db.WithContext(ctx).Model(&domain.Instrument{}).
+		Where("id = ? AND deleted_at IS NULL", pkg.InstrumentID).
+		Count(&instrumentCount).Error
+	if err != nil {
+		return errors.New(utils.TranslateDBError(err))
+	}
+	if instrumentCount == 0 {
+		return errors.New("instrumen tidak ditemukan")
+	}
+
+	if err := r.db.WithContext(ctx).Save(pkg).Error; err != nil {
 		return errors.New(utils.TranslateDBError(err))
 	}
 
@@ -68,18 +89,56 @@ func (r *adminRepo) UpdatePackage(ctx context.Context, pkg *domain.Package) erro
 
 // AssignPackageToStudent assigns a package to a student
 func (r *adminRepo) AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error {
-	var pkg domain.Package
-	if err := r.db.WithContext(ctx).First(&pkg, packageID).Error; err != nil {
-		return err
+	// 1. Cek apakah student exists dan belum dihapus
+	var student domain.User
+	err := r.db.WithContext(ctx).Where("uuid = ? AND role = ? AND deleted_at IS NULL", studentUUID, domain.RoleStudent).First(&student).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("siswa tidak ditemukan")
+		}
+		return errors.New(utils.TranslateDBError(err))
 	}
-	sp := &domain.StudentPackage{
+
+	// 2. Cek apakah package exists dan belum dihapus
+	var pkg domain.Package
+	err = r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", packageID).First(&pkg).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("paket tidak ditemukan")
+		}
+		return errors.New(utils.TranslateDBError(err))
+	}
+
+	// 3. Cek apakah student sudah memiliki student profile, jika belum buat baru
+	var studentProfile domain.StudentProfile
+	err = r.db.WithContext(ctx).Where("user_uuid = ?", studentUUID).First(&studentProfile).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Buat student profile baru
+			studentProfile = domain.StudentProfile{
+				UserUUID: studentUUID,
+			}
+			if err := r.db.WithContext(ctx).Create(&studentProfile).Error; err != nil {
+				return errors.New(utils.TranslateDBError(err))
+			}
+		} else {
+			return errors.New(utils.TranslateDBError(err))
+		}
+	}
+
+	// 4. Assign package ke student dengan membuat entri di student_packages
+	studentPackage := domain.StudentPackage{
 		StudentUUID:    studentUUID,
 		PackageID:      packageID,
-		RemainingQuota: pkg.Quota,
+		RemainingQuota: pkg.Quota, // Set initial quota sesuai paket
 		StartDate:      time.Now(),
-		EndDate:        time.Now().AddDate(0, 1, 0), // default 1 month, can adjust
+		EndDate:        time.Now().AddDate(0, 1, 0), // Contoh: paket berlaku 1 bulan
 	}
-	return r.db.WithContext(ctx).Create(sp).Error
+
+	if err := r.db.WithContext(ctx).Create(&studentPackage).Error; err != nil {
+		return errors.New(utils.TranslateDBError(err))
+	}
+	return nil
 }
 
 // CreatePackage inserts a new package
@@ -168,16 +227,19 @@ func (r *adminRepo) GetAllUsers(ctx context.Context) ([]domain.User, error) {
 func (r *adminRepo) GetAllStudents(ctx context.Context) ([]domain.User, error) {
 	var students []domain.User
 	err := r.db.WithContext(ctx).
-		Where("role = ?", domain.RoleStudent).
+		Preload("StudentProfile.Packages.Package.Instrument").
+		Where("role = ? AND deleted_at IS NULL", domain.RoleStudent).
 		Find(&students).Error
+
 	return students, err
 }
 
 // GetStudentByUUID fetches a student by UUID
 func (r *adminRepo) GetStudentByUUID(ctx context.Context, uuid string) (*domain.User, error) {
 	var student domain.User
-	err := r.db.WithContext(ctx).Preload("StudentProfile").
-		Where("uuid = ? AND role = ?", uuid, domain.RoleStudent).
+	err := r.db.WithContext(ctx).
+		Preload("StudentProfile.Packages.Package.Instrument").
+		Where("uuid = ? AND role = ? AND deleted_at IS NULL", uuid, domain.RoleStudent).
 		First(&student).Error
 	if err != nil {
 		return nil, err

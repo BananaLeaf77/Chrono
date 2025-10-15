@@ -158,6 +158,9 @@ func (h *AdminHandler) UpdatePackage(c *gin.Context) {
 		pkg.Quota = *req.Quota
 	}
 
+	pkg.InstrumentID = *req.InstrumentID
+	pkg.Description = *req.Description
+
 	if err := h.uc.UpdatePackage(c.Request.Context(), pkg); err != nil {
 		utils.PrintLogInfo(&name, 500, "UpdatePackage - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update package", "success": false, "error": utils.TranslateDBError(err)})
@@ -257,7 +260,6 @@ func (h *AdminHandler) UpdateTeacher(c *gin.Context) {
 	}
 
 	user := dto.MapUpdateTeacherRequestToUser(&req)
-	utils.PrintDTO("user to update", user)
 	user.UUID = uuid // assign dari URL, bukan dari JSON
 
 	if err := h.uc.UpdateTeacher(c.Request.Context(), user, req.InstrumentIDs); err != nil {
@@ -385,13 +387,14 @@ func (h *AdminHandler) DeleteInstrument(c *gin.Context) {
 }
 
 func (h *AdminHandler) GetAllPackages(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
 	pkgs, err := h.uc.GetAllPackages(c.Request.Context())
 	if err != nil {
-		utils.PrintLogInfo(nil, 500, "GetAllPackages - UseCase", &err)
+		utils.PrintLogInfo(&name, 500, "GetAllPackages - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	utils.PrintLogInfo(nil, 200, "GetAllPackages", nil)
+	utils.PrintLogInfo(&name, 200, "GetAllPackages", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": pkgs})
 }
 
@@ -420,24 +423,27 @@ func (h *AdminHandler) GetAllUsers(c *gin.Context) {
 }
 
 func (h *AdminHandler) GetAllStudents(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
 	students, err := h.uc.GetAllStudents(c.Request.Context())
 	if err != nil {
-		utils.PrintLogInfo(nil, 500, "GetAllStudents - UseCase", &err)
+		utils.PrintLogInfo(&name, 500, "GetAllStudents - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	utils.PrintLogInfo(nil, 200, "GetAllStudents", nil)
+	utils.PrintLogInfo(&name, 200, "GetAllStudents", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": students})
 }
 
 func (h *AdminHandler) GetStudentByUUID(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
 	uuid := c.Param("uuid")
 	student, err := h.uc.GetStudentByUUID(c.Request.Context(), uuid)
 	if err != nil {
-		utils.PrintLogInfo(&uuid, 500, "GetStudentByUUID - UseCase", &err)
+		utils.PrintLogInfo(&name, 500, "GetStudentByUUID - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	utils.PrintLogInfo(&uuid, 200, "GetStudentByUUID", nil)
+
+	utils.PrintLogInfo(&name, 200, "GetStudentByUUID", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": student})
 }
