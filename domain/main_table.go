@@ -88,7 +88,7 @@ type TeacherSchedule struct {
 	StartTime   string     `gorm:"not null" json:"start_time"`          // "15:00"
 	EndTime     string     `gorm:"not null" json:"end_time"`            // "17:00"
 	IsBooked    bool       `gorm:"default:false" json:"is_booked"`
-	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`	
 	UpdatedAt   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt   *time.Time `gorm:"index" json:"deleted_at,omitempty"`
 

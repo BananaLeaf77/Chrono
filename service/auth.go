@@ -28,9 +28,10 @@ type authService struct {
 
 func NewAuthService(userRepo domain.UserRepository, otpRepo domain.OTPRepository, secret string) domain.AuthUseCase {
 	return &authService{
-		userRepo:     userRepo,
-		otpRepo:      otpRepo,
-		accessToken:  utils.NewJWTManager(secret, time.Hour),
+		userRepo: userRepo,
+		otpRepo:  otpRepo,
+		// accessToken:  utils.NewJWTManager(secret, time.Hour),
+		accessToken:  utils.NewJWTManager(secret, 24*time.Hour),
 		refreshToken: utils.NewJWTManager(secret, 7*24*time.Hour),
 	}
 }
