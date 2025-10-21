@@ -36,6 +36,10 @@ func NewAuthService(userRepo domain.UserRepository, otpRepo domain.OTPRepository
 	}
 }
 
+func (s *authService) GetRefreshTokenManager() *utils.JWTManager {
+	return s.refreshToken
+}
+
 func (s *authService) Me(ctx context.Context, userUUID string) (*domain.User, error) {
 	user, err := s.userRepo.GetUserByUUID(ctx, userUUID)
 	if err != nil {

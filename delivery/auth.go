@@ -6,6 +6,7 @@ import (
 	"chronosphere/utils"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,6 +27,8 @@ func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase) {
 		public.POST("/forgot-password", handler.ForgotPassword)
 		public.POST("/reset-password", handler.ResetPassword)
 		public.POST("/resend-otp", handler.ResendOTP)
+		public.POST("/refresh-token", handler.RefreshToken)
+		public.POST("/logout", handler.Logout)
 	}
 
 	// Protected routes
@@ -35,6 +38,94 @@ func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase) {
 		protected.GET("/me", handler.Me)
 		protected.POST("/change-password", handler.ChangePassword)
 	}
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	// ✅ Clear cookie (for web)
+	c.SetCookie(
+		"refresh_token",
+		"",
+		-1, // Expire immediately
+		"/",
+		"",    // domain
+		false, // secure=false for dev
+		true,  // HttpOnly
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Logout successful",
+	})
+}
+
+func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	// Try to read refresh token from cookie (for Web)
+	refreshToken, err := c.Cookie("refresh_token")
+	if err != nil || refreshToken == "" {
+		// If not found in cookie, try from JSON body (for Mobile)
+		var req struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		if bindErr := c.ShouldBindJSON(&req); bindErr != nil || req.RefreshToken == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "No refresh token provided",
+			})
+			return
+		}
+		refreshToken = req.RefreshToken
+	}
+
+	// ✅ Verify refresh token
+	userUUID, role, name, err := h.authUC.GetRefreshTokenManager().VerifyToken(refreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Invalid or expired refresh token",
+		})
+		return
+	}
+
+	// ✅ Generate new access token
+	newAccessToken, err := h.authUC.GetAccessTokenManager().GenerateToken(userUUID, role, name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to generate new access token",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// ✅ (Optional) Generate new refresh token for long sessions
+	newRefreshToken, err := h.authUC.GetRefreshTokenManager().GenerateToken(userUUID, role, name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to generate new refresh token",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// ✅ For web clients, update HttpOnly cookie
+	c.SetCookie(
+		"refresh_token",
+		newRefreshToken,
+		60*60*24*7, // 7 days
+		"/",
+		"",    // ✅ replace in prod
+		false, // ✅ secure cookies (HTTPS only)
+		true,  // ✅ HttpOnly
+	)
+
+	// ✅ Return new access token
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"message":       "Token refreshed successfully",
+		"access_token":  newAccessToken,
+		"refresh_token": newRefreshToken,
+	})
 }
 
 type ResendOTPRequest struct {
@@ -200,7 +291,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "Invalid request",
 			"success": false,
-			"error":   err.Error()})
+			"error":   err.Error(),
+		})
 		return
 	}
 
@@ -210,16 +302,45 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"message": "Login failed",
 			"success": false,
-			"error":   err.Error()})
+			"error":   err.Error(),
+		})
 		return
 	}
 
-	utils.PrintLogInfo(&req.Email, 200, "Login", nil)
+	// ✅ Detect platform (Web or Mobile)
+	userAgent := c.Request.Header.Get("User-Agent")
+	isMobile := strings.Contains(strings.ToLower(userAgent), "okhttp") || // Android
+		strings.Contains(strings.ToLower(userAgent), "ios") || // iOS
+		strings.Contains(strings.ToLower(userAgent), "mobile")
+
+	if !isMobile {
+		// ✅ For WEB: store refresh_token in HttpOnly secure cookie
+		c.SetCookie(
+			"refresh_token",
+			tokens.RefreshToken, // ✅ correct variable
+			60*60*24*7,          // 7 days
+			"/",
+			"",    // ⚠️ change to your actual domain in production
+			false, // ✅ secure (HTTPS only)
+			true,  // ✅ HttpOnly
+		)
+
+		utils.PrintLogInfo(&req.Email, 200, "Login", nil)
+		c.JSON(http.StatusOK, gin.H{
+			"success":      true,
+			"access_token": tokens.AccessToken,
+			"message":      "Login successful",
+		})
+		return
+	}
+
+	// ✅ For MOBILE: return both tokens
 	c.JSON(http.StatusOK, gin.H{
 		"success":       true,
 		"access_token":  tokens.AccessToken,
 		"refresh_token": tokens.RefreshToken,
-		"message":       "Login successful"})
+		"message":       "Login successful",
+	})
 }
 
 type ForgotPasswordRequest struct {

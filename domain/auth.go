@@ -9,6 +9,7 @@ import (
 type AuthUseCase interface {
 	Me(ctx context.Context, userUUID string) (*User, error)
 	GetAccessTokenManager() *utils.JWTManager
+	GetRefreshTokenManager() *utils.JWTManager // 🔥 add this line
 	Register(ctx context.Context, email string, name string, telephone string, password string) error
 	VerifyOTP(ctx context.Context, email, otp string) error
 	Login(ctx context.Context, email, password string) (*AuthTokens, error)
