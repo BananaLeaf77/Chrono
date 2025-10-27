@@ -30,11 +30,28 @@ func TeacherAndAdminOnly() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := utils.GetAPIHitter(c)
 		role, exists := c.Get("role")
-		if !exists || role == domain.RoleAdmin || role == domain.RoleTeacher {
+		if !exists || role == domain.RoleStudent {
 			utils.PrintLogInfo(&name, 403, "Admin and Teacher only Middleware - Role Check", nil)
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
 				"message": "Admin and Teacher access required",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func StudentAndAdminOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := utils.GetAPIHitter(c)
+		role, exists := c.Get("role")
+		if !exists || role == domain.RoleTeacher {
+			utils.PrintLogInfo(&name, 403, "Admin and Student only Middleware - Role Check", nil)
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "Admin and Student access required",
 			})
 			c.Abort()
 			return

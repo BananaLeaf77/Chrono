@@ -39,12 +39,14 @@ func main() {
 	// Init repositories
 	authRepo := repository.NewAuthRepository(db)
 	studentRepo := repository.NewStudentRepository(db)
+	teacherRepo := repository.NewTeacherRepository(db)
 	adminRepo := repository.NewAdminRepository(db)
 	otpRepo := repository.NewOTPRedisRepository(redisAddr, "", 0)
 
 	// Init services
 	studentService := service.NewStudentUseCase(studentRepo)
 	adminService := service.NewAdminService(adminRepo)
+	teacherService := service.NewTeacherService(teacherRepo)
 
 	// Auth service with token managers
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
@@ -53,10 +55,11 @@ func main() {
 	app := gin.Default()
 	config.InitMiddleware(app)
 
-	// Init handlers (inject dependencies)
+	// Init handlers (inject dependencies)s
 	delivery.NewAuthHandler(app, authService)
-	delivery.NewStudentHandler(app, studentService)
+	delivery.NewStudentHandler(app, studentService, authService.GetAccessTokenManager())
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
+	delivery.NewTeacherHandler(app, teacherService, authService.GetAccessTokenManager())
 
 	// Start server
 	port := os.Getenv("APP_PORT")

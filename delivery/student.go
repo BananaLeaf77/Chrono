@@ -1,7 +1,10 @@
 package delivery
 
 import (
+	"chronosphere/config"
 	"chronosphere/domain"
+	"chronosphere/middleware"
+	"chronosphere/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -10,13 +13,14 @@ type StudentHandler struct {
 	authUC domain.StudentUseCase
 }
 
-func NewStudentHandler(r *gin.Engine, authUC domain.StudentUseCase) {
+func NewStudentHandler(r *gin.Engine, authUC domain.StudentUseCase, jwtManager *utils.JWTManager) {
 	handler := &StudentHandler{authUC: authUC}
 
-	route := r.Group("/student")
+	student := r.Group("/student")
+	student.Use(config.AuthMiddleware(jwtManager), middleware.StudentAndAdminOnly())
 	{
-		route.GET("/profile", handler.GetMyProfile)
-		route.PUT("/modify", handler.UpdateStudentData)
+		student.GET("/profile", handler.GetMyProfile)
+		student.PUT("/modify", handler.UpdateStudentData)
 	}
 
 }

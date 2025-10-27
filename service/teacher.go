@@ -19,15 +19,12 @@ func (s *teacherService) GetMyProfile(ctx context.Context, uuid string) (*domain
 	return s.repo.GetMyProfile(ctx, uuid)
 }
 
-func (s *teacherService) UpdateTeacherData(ctx context.Context, userUUID string, user *domain.User) error {
-	if user == nil {
-		return nil
-	}
+func (s *teacherService) UpdateTeacherData(ctx context.Context, userUUID string, user domain.User) error {
 	return s.repo.UpdateTeacherData(ctx, userUUID, user)
 }
 
 // ✅ Get teacher schedules
-func (uc *teacherService) GetMySchedules(ctx context.Context, teacherUUID string) ([]domain.TeacherSchedule, error) {
+func (uc *teacherService) GetMySchedules(ctx context.Context, teacherUUID string) (*[]domain.TeacherSchedule, error) {
 	return uc.repo.GetMySchedules(ctx, teacherUUID)
 }
 
