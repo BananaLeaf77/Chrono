@@ -38,9 +38,75 @@ func NewTeacherHandler(app *gin.Engine, tc domain.TeacherUseCase, jwtManager *ut
 	}
 }
 
-func (h *TeacherHandler) GetAllBookedClass(c *gin.Context) {
-	name := utils.GetAPIHitter()
+func (h *TeacherHandler) CancelBookedClass(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	uuid, theBool := c.Get("userUUID")
+	if !theBool {
+		utils.PrintLogInfo(&name, 401, "GetAllBookedClass", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to Cancel Booked Class",
+		})
+		return
+	}
+	bookingID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		utils.PrintLogInfo(&name, 400, "CancelBookedClass - InvalidID", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid booking ID",
+			"message": "Failed to Cancel Booked Class",
+		})
+		return
+	}
 
+	if err := h.tc.CancelBookedClass(c.Request.Context(), bookingID, uuid.(string)); err != nil {
+		utils.PrintLogInfo(&name, 500, "CancelBookedClass - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to Cancel Booked Class",
+		})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "CancelBookedClass", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Booking cancelled successfully",
+	})
+}
+
+func (h *TeacherHandler) GetAllBookedClass(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	uuid, theBool := c.Get("userUUID")
+	if !theBool {
+		utils.PrintLogInfo(&name, 401, "GetAllBookedClass", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to Get All Booked Class",
+		})
+		return
+	}
+
+	bookedClasses, err := h.tc.GetAllBookedClass(c.Request.Context(), uuid.(string))
+	if err != nil {
+		utils.PrintLogInfo(&name, 500, "GetAllBookedClass", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to Get All Booked Class",
+		})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "GetAllBookedClass", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    bookedClasses,
+	})
 }
 
 func (h *TeacherHandler) AddAvailability(c *gin.Context) {
@@ -51,6 +117,7 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 		utils.PrintLogInfo(&name, 400, "AddAvailability - BindJSON", &err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
+			"message": "Failed to Add Availability",
 			"error":   utils.TranslateValidationError(err),
 		})
 		return
@@ -72,7 +139,8 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 		utils.PrintLogInfo(&name, 400, "AddAvailability - InvalidDay", nil)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": fmt.Sprintf("hari tidak sesuai: '%s'. gunakan nama hari yang valid (Senin–Minggu).", req.DayOfWeek),
+			"message": "Failed to Add Availability",
+			"errror":  fmt.Sprintf("hari tidak sesuai: '%s'. gunakan nama hari yang valid (Senin–Minggu).", req.DayOfWeek),
 		})
 		return
 	}
@@ -82,7 +150,8 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 		utils.PrintLogInfo(&name, 401, "GetMyProfile", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
-			"message": "Unauthorized: missing user context",
+			"message": "Failed to Add Availability",
+			"error":   "Unauthorized: missing user context",
 		})
 		return
 	}
@@ -93,7 +162,8 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 			utils.PrintLogInfo(&name, 400, "AddAvailability - InvalidTimeFormat", &err)
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"message": fmt.Sprintf("Format jam tidak valid: %s (gunakan HH:mm, contoh 14:00)", startTimeStr),
+				"error":   fmt.Sprintf("Format jam tidak valid: %s (gunakan HH:mm, contoh 14:00)", startTimeStr),
+				"message": "Failed to Add Availability",
 			})
 			return
 		}
@@ -111,7 +181,8 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 			utils.PrintLogInfo(&name, 500, "AddAvailability - UseCase", &err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"message": err.Error(),
+				"error":   err.Error(),
+				"message": "Failed to Add Availability",
 			})
 			return
 		}
@@ -131,7 +202,8 @@ func (th *TeacherHandler) GetMySchedules(c *gin.Context) {
 		utils.PrintLogInfo(&name, 401, "GetMyProfile", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
-			"message": "Unauthorized: missing user context",
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to Get My Schedules",
 		})
 		return
 	}
@@ -142,6 +214,7 @@ func (th *TeacherHandler) GetMySchedules(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   err.Error(),
+			"message": "Failed to Get My Schedules",
 		})
 		return
 	}
@@ -161,7 +234,8 @@ func (th *TeacherHandler) GetMyProfile(c *gin.Context) {
 		utils.PrintLogInfo(&name, 401, "GetMyProfile", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
-			"message": "Unauthorized: missing user context",
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to Get My Profile",
 		})
 		return
 	}
@@ -173,6 +247,7 @@ func (th *TeacherHandler) GetMyProfile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   err.Error(),
+			"message": "Failed to Get My Profile",
 		})
 		return
 	}
@@ -191,7 +266,8 @@ func (th *TeacherHandler) UpdateTeacherData(c *gin.Context) {
 		utils.PrintLogInfo(&name, 401, "GetMyProfile", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
-			"message": "Unauthorized: missing user context",
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to Update Teacher Data",
 		})
 		return
 	}
@@ -202,6 +278,7 @@ func (th *TeacherHandler) UpdateTeacherData(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   utils.TranslateValidationError(err),
+			"message": "Failed to Update Teacher Data",
 		})
 		return
 	}
@@ -214,6 +291,7 @@ func (th *TeacherHandler) UpdateTeacherData(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   utils.TranslateDBError(err),
+			"message": "Failed to Update Teacher Data",
 		})
 		return
 	}
@@ -232,7 +310,8 @@ func (th *TeacherHandler) DeleteAddAvailability(c *gin.Context) {
 		utils.PrintLogInfo(&name, 401, "GetMyProfile", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
-			"message": "Unauthorized: missing user context",
+			"message": "Failed to Delete Availability",
+			"error":   "Unauthorized: missing user context",
 		})
 		return
 	}
@@ -243,7 +322,8 @@ func (th *TeacherHandler) DeleteAddAvailability(c *gin.Context) {
 		utils.PrintLogInfo(&name, 400, "DeleteAddAvailability - InvalidID", &err)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
-			"message": "atoi failure",
+			"message": "Failed to Delete Availability",
+			"error":   "atoi failure",
 		})
 		return
 	}
@@ -253,6 +333,7 @@ func (th *TeacherHandler) DeleteAddAvailability(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   utils.TranslateDBError(err),
+			"message": "Failed to Delete Availability",
 		})
 		return
 	}
