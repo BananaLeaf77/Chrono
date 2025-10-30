@@ -26,7 +26,6 @@ func CalculateEndTime(startTime string, durationHours float64) string {
 }
 
 func GetNextClassDate(dayOfWeek string, startTime time.Time) time.Time {
-	// Map Indonesian to English weekday
 	dayMap := map[string]time.Weekday{
 		"minggu": time.Sunday,
 		"senin":  time.Monday,
@@ -37,7 +36,11 @@ func GetNextClassDate(dayOfWeek string, startTime time.Time) time.Time {
 		"sabtu":  time.Saturday,
 	}
 
-	targetDay := dayMap[strings.ToLower(dayOfWeek)]
+	targetDay, ok := dayMap[strings.ToLower(dayOfWeek)]
+	if !ok {
+		return time.Now() // fallback if input invalid
+	}
+
 	now := time.Now()
 	diff := (int(targetDay) - int(now.Weekday()) + 7) % 7
 	nextClassDate := now.AddDate(0, 0, diff)

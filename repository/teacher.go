@@ -230,21 +230,21 @@ func (r *teacherRepository) CancelBookedClass(ctx context.Context, bookingID int
 		return errors.New("booking tidak ditemukan atau sudah dibatalkan")
 	}
 
-	// ✅ Ensure that this booking belongs to this teacher
+	// ✅ Ensure the booking belongs to this teacher
 	if booking.Schedule.TeacherUUID != teacherUUID {
 		return errors.New("anda tidak memiliki akses ke booking ini")
 	}
 
-	// 🕐 Check if H-1 rule is violated
-	now := time.Now()
+	// 🕐 Compute the next scheduled class datetime
 	classDate := utils.GetNextClassDate(booking.Schedule.DayOfWeek, booking.Schedule.StartTime)
-	diff := classDate.Sub(now)
+	now := time.Now()
 
-	if diff < time.Hour {
-		return errors.New("pembatalan hanya dapat dilakukan minimal 1 jam sebelum kelas dimulai")
+	// Check if it's less than 24 hours before class
+	if classDate.Sub(now) < 24*time.Hour {
+		return errors.New("pembatalan hanya dapat dilakukan maksimal H-1 sebelum kelas dimulai")
 	}
 
-	// 🔁 Cancel booking
+	// 🔁 Perform cancellation
 	cancelTime := time.Now()
 	err = r.db.WithContext(ctx).Model(&domain.Booking{}).
 		Where("id = ?", booking.ID).
