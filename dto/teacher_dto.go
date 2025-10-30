@@ -2,6 +2,11 @@ package dto
 
 import "chronosphere/domain"
 
+type AddAvailabilityRequest struct {
+	DayOfWeek string   `json:"day_of_week" binding:"required"`
+	Times     []string `json:"times" binding:"required,min=1"`
+}
+
 // Request untuk Create Teacher
 type CreateTeacherRequest struct {
 	Name          string  `json:"name" binding:"required,min=3,max=50"`

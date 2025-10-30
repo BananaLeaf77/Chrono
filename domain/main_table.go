@@ -79,20 +79,19 @@ type Booking struct {
 	Notes         *string    `json:"notes,omitempty"`
 
 	Schedule TeacherSchedule `gorm:"foreignKey:ScheduleID" json:"schedule"`
+	Student  User            `gorm:"foreignKey:StudentUUID;references:UUID" json:"student"`
 }
 
 type TeacherSchedule struct {
 	ID          int        `gorm:"primaryKey" json:"id"`
 	TeacherUUID string     `gorm:"type:uuid;not null" json:"teacher_uuid"`
-	DayOfWeek   string     `gorm:"size:10;not null" json:"day_of_week"` // e.g. "Monday"
-	StartTime   string     `gorm:"not null" json:"start_time"`          // "15:00"
-	EndTime     string     `gorm:"not null" json:"end_time"`            // "17:00"
+	DayOfWeek   string     `gorm:"size:10;not null" json:"day_of_week"`
+	StartTime   time.Time  `gorm:"type:time;not null" json:"start_time"`
+	EndTime     time.Time  `gorm:"type:time;not null" json:"end_time"`
 	IsBooked    bool       `gorm:"default:false" json:"is_booked"`
-	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`	
+	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt   *time.Time `gorm:"index" json:"deleted_at,omitempty"`
-
-	Teacher User `gorm:"foreignKey:TeacherUUID;constraint:OnDelete:CASCADE;" json:"teacher"`
 }
 
 type ClassHistory struct {

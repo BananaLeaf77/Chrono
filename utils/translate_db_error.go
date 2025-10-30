@@ -15,55 +15,65 @@ func TranslateDBError(err error) string {
 		return ""
 	}
 
-	// Default language
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.New("internal error translating DB error")
+		}
+	}()
+
 	lang := strings.ToUpper(strings.TrimSpace(os.Getenv("APP_API_RETURN_LANG")))
 	if lang == "" {
 		lang = "EN"
 	}
 
-	// Handle PostgreSQL error
+	// PostgreSQL-specific errors
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23505": // Unique violation
-			if lang == "IDN" {
-				return "Data sudah ada, gunakan nilai lain"
+			msg := "Duplicate value, please use another"
+			if strings.Contains(pgErr.Message, "users_email_key") {
+				msg = "Email already exists"
+			} else if strings.Contains(pgErr.Message, "users_phone_key") {
+				msg = "Phone number already exists"
 			}
-			return "Duplicate value, please use another"
+			if lang == "IDN" {
+				msg = strings.ReplaceAll(msg, "already exists", "sudah digunakan")
+			}
+			return msg
 
-		case "23503": // Foreign key violation
+		case "23503":
 			if lang == "IDN" {
 				return "Data ini sedang digunakan di tabel lain"
 			}
-			return "This data is referenced by another record"
+			return "This record is referenced by another table"
 
-		case "23502": // Not null violation
+		case "23502":
 			if lang == "IDN" {
 				return "Ada kolom yang wajib diisi namun kosong"
 			}
 			return "Some required fields are missing"
 
-		case "22P02": // Invalid text representation (e.g., UUID salah format)
+		case "22P02":
 			if lang == "IDN" {
 				return "Format data tidak valid"
 			}
 			return "Invalid data format"
 
-		case "42703": // Undefined column
+		case "42703":
 			if lang == "IDN" {
 				return "Kolom yang dirujuk tidak ditemukan"
 			}
 			return "Column not found in database"
-
-		default:
-			if lang == "IDN" {
-				return "Terjadi kesalahan pada database"
-			}
-			return "A database error occurred"
 		}
+
+		if lang == "IDN" {
+			return "Terjadi kesalahan pada database"
+		}
+		return "A database error occurred"
 	}
 
-	// Handle GORM-level error
+	// Handle GORM errors
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		if lang == "IDN" {
 			return "Data tidak ditemukan"
@@ -71,8 +81,23 @@ func TranslateDBError(err error) string {
 		return "Record not found"
 	}
 
-	// Fallback — tampilkan pesan asli
-	if lang == "IDN" && strings.Contains(strings.ToLower(err.Error()), "connection") {
+	// Handle context timeouts
+	lowerErr := strings.ToLower(err.Error())
+	if strings.Contains(lowerErr, "context deadline exceeded") {
+		if lang == "IDN" {
+			return "Permintaan melebihi batas waktu"
+		}
+		return "Request timeout"
+	}
+	if strings.Contains(lowerErr, "context canceled") {
+		if lang == "IDN" {
+			return "Permintaan dibatalkan"
+		}
+		return "Request was cancelled"
+	}
+
+	// Connection error fallback
+	if lang == "IDN" && strings.Contains(lowerErr, "connection") {
 		return "Gagal terhubung ke database"
 	}
 

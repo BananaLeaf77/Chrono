@@ -112,6 +112,31 @@ func BootDB() (*gorm.DB, *string, error) {
 		}
 	}
 
+	// ✅ Seed common instruments if they don't exist
+	commonInstruments := []string{
+		"Guitar",
+		"Piano",
+		"Violin",
+		"Drums",
+		"Bass",
+		"Ukulele",
+		"Vocal",
+		"Flute",
+		"Saxophone",
+	}
+
+	for _, instrumentName := range commonInstruments {
+		var count int64
+		db.Model(&domain.Instrument{}).Where("name = ?", instrumentName).Count(&count)
+		if count == 0 {
+			if err := db.Create(&domain.Instrument{Name: instrumentName}).Error; err != nil {
+				log.Printf("⚠️ Failed to seed instrument '%s': %v", instrumentName, err)
+			} else {
+				log.Printf("✅ Seeded instrument: %s", instrumentName)
+			}
+		}
+	}
+
 	log.Print("✅ Connected to ", utils.ColorText("Database", utils.Green), " successfully")
 	return db, &address, nil
 }

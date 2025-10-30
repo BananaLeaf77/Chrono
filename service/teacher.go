@@ -3,8 +3,6 @@ package service
 import (
 	"chronosphere/domain"
 	"context"
-	"errors"
-	"time"
 )
 
 type teacherService struct {
@@ -13,6 +11,14 @@ type teacherService struct {
 
 func NewTeacherService(TeacherRepo domain.TeacherRepository) domain.TeacherUseCase {
 	return &teacherService{repo: TeacherRepo}
+}
+
+func (s *teacherService) CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string) error {
+	return s.repo.CancelBookedClass(ctx, bookingID, teacherUUID)
+}
+
+func (s *teacherService) GetAllBookedClass(ctx context.Context, teacherUUID string) (*[]domain.Booking, error) {
+	return s.repo.GetAllBookedClass(ctx, teacherUUID)
 }
 
 func (s *teacherService) GetMyProfile(ctx context.Context, uuid string) (*domain.User, error) {
@@ -28,24 +34,7 @@ func (uc *teacherService) GetMySchedules(ctx context.Context, teacherUUID string
 	return uc.repo.GetMySchedules(ctx, teacherUUID)
 }
 
-// ✅ Add availability (validation)
 func (uc *teacherService) AddAvailability(ctx context.Context, teacherUUID string, schedule *domain.TeacherSchedule) error {
-	if schedule.DayOfWeek == "" || schedule.StartTime == "" || schedule.EndTime == "" {
-		return errors.New("day_of_week, start_time, and end_time are required")
-	}
-
-	// Optional validation: ensure duration = 1 hour
-	start, err1 := time.Parse("15:04", schedule.StartTime)
-	end, err2 := time.Parse("15:04", schedule.EndTime)
-	if err1 != nil || err2 != nil {
-		return errors.New("invalid time format, use HH:MM")
-	}
-	if end.Sub(start) != time.Hour {
-		return errors.New("class duration must be exactly 1 hour")
-	}
-
-	schedule.TeacherUUID = teacherUUID
-	schedule.IsBooked = false
 	return uc.repo.AddAvailability(ctx, schedule)
 }
 

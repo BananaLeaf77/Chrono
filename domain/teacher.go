@@ -11,6 +11,8 @@ type TeacherUseCase interface {
 	GetMySchedules(ctx context.Context, teacherUUID string) (*[]TeacherSchedule, error)
 	AddAvailability(ctx context.Context, teacherUUID string, schedule *TeacherSchedule) error
 	DeleteAvailability(ctx context.Context, scheduleID int, teacherUUID string) error
+	GetAllBookedClass(ctx context.Context, uuid string) (*[]Booking, error)
+	CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string) error
 }
 
 type TeacherRepository interface {
@@ -20,4 +22,6 @@ type TeacherRepository interface {
 	GetMySchedules(ctx context.Context, teacherUUID string) (*[]TeacherSchedule, error)
 	AddAvailability(ctx context.Context, schedule *TeacherSchedule) error
 	DeleteAvailability(ctx context.Context, scheduleID int, teacherUUID string) error
+	GetAllBookedClass(ctx context.Context, uuid string) (*[]Booking, error)
+	CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string) error
 }

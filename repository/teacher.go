@@ -2,9 +2,11 @@ package repository
 
 import (
 	"chronosphere/domain"
+	"chronosphere/utils"
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -15,6 +17,30 @@ type teacherRepository struct {
 
 func NewTeacherRepository(db *gorm.DB) domain.TeacherRepository {
 	return &teacherRepository{db: db}
+}
+
+func (r *teacherRepository) AddAvailability(ctx context.Context, schedule *domain.TeacherSchedule) error {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&domain.TeacherSchedule{}).
+		Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL", schedule.TeacherUUID, schedule.DayOfWeek).
+		Where(`
+			(start_time, end_time) OVERLAPS (?, ?)
+		`, schedule.StartTime, schedule.EndTime).
+		Count(&count).Error
+	if err != nil {
+		return fmt.Errorf("failed to check overlap: %w", err)
+	}
+	if count > 0 {
+		return errors.New("slot waktu konflik mohon check kembali waktu anda")
+	}
+
+	// If no conflicts, proceed
+	if err := r.db.WithContext(ctx).Create(schedule).Error; err != nil {
+		return fmt.Errorf("failed to add schedule: %w", err)
+	}
+
+	return nil
 }
 
 func (r *teacherRepository) GetMyProfile(ctx context.Context, userUUID string) (*domain.User, error) {
@@ -131,14 +157,104 @@ func (r *teacherRepository) GetMySchedules(ctx context.Context, teacherUUID stri
 	return &schedules, err
 }
 
-// ✅ Add new availability (schedule)
-func (r *teacherRepository) AddAvailability(ctx context.Context, schedule *domain.TeacherSchedule) error {
-	return r.db.WithContext(ctx).Create(schedule).Error
+func (r *teacherRepository) DeleteAvailability(ctx context.Context, scheduleID int, teacherUUID string) error {
+	var schedule domain.TeacherSchedule
+	err := r.db.WithContext(ctx).
+		Where("id = ? AND teacher_uuid = ? AND deleted_at IS NULL", scheduleID, teacherUUID).
+		First(&schedule).Error
+	if err != nil {
+		return errors.New("jadwal tidak ditemukan")
+	}
+
+	// 1️⃣ Check if this schedule has any active bookings
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&domain.Booking{}).
+		Where("schedule_id = ? AND status IN ?", scheduleID, []string{"booked", "rescheduled"}).
+		Count(&count).Error; err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return errors.New("jadwal ini sudah dipesan, tidak bisa dihapus. harap lakukan pembatalan terlebih dahulu")
+	}
+
+	// 2️⃣ Check if the class has already completed (linked to ClassHistory)
+	var completedCount int64
+	if err := r.db.WithContext(ctx).
+		Model(&domain.ClassHistory{}).
+		Where("booking_id IN (SELECT id FROM bookings WHERE schedule_id = ?)", scheduleID).
+		Count(&completedCount).Error; err != nil {
+		return err
+	}
+
+	if completedCount > 0 {
+		return errors.New("jadwal ini sudah memiliki riwayat kelas dan tidak dapat dihapus")
+	}
+
+	// 3️⃣ Soft delete (mark as deleted)
+	if err := r.db.WithContext(ctx).Model(&domain.TeacherSchedule{}).
+		Where("id = ?", scheduleID).
+		Update("deleted_at", time.Now()).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// ✅ Delete availability (only if not booked)
-func (r *teacherRepository) DeleteAvailability(ctx context.Context, scheduleID int, teacherUUID string) error {
-	return r.db.WithContext(ctx).
-		Where("id = ? AND teacher_uuid = ? AND is_booked = false", scheduleID, teacherUUID).
-		Delete(&domain.TeacherSchedule{}).Error
+func (r *teacherRepository) GetAllBookedClass(ctx context.Context, teacherUUID string) (*[]domain.Booking, error) {
+	var bookings []domain.Booking
+
+	err := r.db.WithContext(ctx).
+		Preload("Student").
+		Preload("Schedule").
+		Where("schedule_id IN (SELECT id FROM teacher_schedules WHERE teacher_uuid = ? AND deleted_at IS NULL)", teacherUUID).
+		Find(&bookings).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &bookings, nil
+}
+
+func (r *teacherRepository) CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string) error {
+	var booking domain.Booking
+
+	// 🔍 Load booking + schedule to check timing
+	err := r.db.WithContext(ctx).
+		Preload("Schedule").
+		Where("id = ? AND status = ?", bookingID, "booked").
+		First(&booking).Error
+	if err != nil {
+		return errors.New("booking tidak ditemukan atau sudah dibatalkan")
+	}
+
+	// ✅ Ensure that this booking belongs to this teacher
+	if booking.Schedule.TeacherUUID != teacherUUID {
+		return errors.New("anda tidak memiliki akses ke booking ini")
+	}
+
+	// 🕐 Check if H-1 rule is violated
+	now := time.Now()
+	classDate := utils.GetNextClassDate(booking.Schedule.DayOfWeek, booking.Schedule.StartTime)
+	diff := classDate.Sub(now)
+
+	if diff < time.Hour {
+		return errors.New("pembatalan hanya dapat dilakukan minimal 1 jam sebelum kelas dimulai")
+	}
+
+	// 🔁 Cancel booking
+	cancelTime := time.Now()
+	err = r.db.WithContext(ctx).Model(&domain.Booking{}).
+		Where("id = ?", booking.ID).
+		Updates(map[string]interface{}{
+			"status":       "cancelled",
+			"cancelled_at": cancelTime,
+		}).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
