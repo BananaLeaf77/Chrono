@@ -19,6 +19,96 @@ func NewTeacherRepository(db *gorm.DB) domain.TeacherRepository {
 	return &teacherRepository{db: db}
 }
 
+func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teacherUUID string, payload domain.ClassHistory) error {
+	tx := r.db.WithContext(ctx).Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 1️⃣ Get booking by ID
+	var booking domain.Booking
+	err := tx.Preload("Schedule").
+		Where("id = ? AND status = ?", bookingID, "booked").
+		First(&booking).Error
+	if err != nil {
+		tx.Rollback()
+		return errors.New("booking tidak ditemukan atau sudah selesai")
+	}
+
+	// 2️⃣ Check if the booking belongs to this teacher
+	if booking.Schedule.TeacherUUID != teacherUUID {
+		tx.Rollback()
+		return errors.New("anda tidak memiliki akses ke booking ini")
+	}
+
+	// 3️⃣ Ensure class time has passed
+	now := time.Now()
+	if now.Before(booking.Schedule.EndTime) {
+		tx.Rollback()
+		return errors.New("kelas belum selesai, tunggu hingga waktu berakhir")
+	}
+
+	// 4️⃣ Create ClassHistory record
+	classHistory := domain.ClassHistory{
+		BookingID:    booking.ID,
+		TeacherUUID:  booking.Schedule.TeacherUUID,
+		StudentUUID:  booking.StudentUUID,
+		InstrumentID: payload.InstrumentID, // you can also use booking.Schedule.InstrumentID if available
+		PackageID:    payload.PackageID,
+		Status:       domain.StatusCompleted,
+		Date:         now,
+		StartTime:    booking.Schedule.StartTime.Format("15:04"),
+		EndTime:      booking.Schedule.EndTime.Format("15:04"),
+		Notes:        payload.Notes,
+	}
+
+	if err := tx.Create(&classHistory).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal membuat riwayat kelas: %w", err)
+	}
+
+	// 5️⃣ Save class documentations (if any)
+	for _, doc := range payload.Documentations {
+		doc.ClassHistoryID = classHistory.ID
+		if err := tx.Create(&doc).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal menyimpan dokumentasi kelas: %w", err)
+		}
+	}
+
+	// 6️⃣ Update booking status
+	completedAt := time.Now()
+	if err := tx.Model(&domain.Booking{}).
+		Where("id = ?", booking.ID).
+		Updates(map[string]interface{}{
+			"status":       "completed",
+			"completed_at": completedAt,
+		}).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal memperbarui status booking: %w", err)
+	}
+
+	// 7️⃣ Decrement student's package quota (if applicable)
+	if payload.PackageID != nil {
+		if err := tx.Model(&domain.StudentPackage{}).
+			Where("student_uuid = ? AND package_id = ?", booking.StudentUUID, *payload.PackageID).
+			UpdateColumn("remaining_quota", gorm.Expr("remaining_quota - ?", 1)).
+			Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal mengurangi kuota paket: %w", err)
+		}
+	}
+
+	// 8️⃣ Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("gagal menyimpan transaksi: %w", err)
+	}
+
+	return nil
+}
+
 func (r *teacherRepository) AddAvailability(ctx context.Context, schedule *domain.TeacherSchedule) error {
 	var count int64
 	err := r.db.WithContext(ctx).
@@ -215,45 +305,83 @@ func (r *teacherRepository) GetAllBookedClass(ctx context.Context, teacherUUID s
 		return nil, err
 	}
 
+	now := time.Now()
+	for i := range bookings {
+		start := (bookings)[i].Schedule.StartTime
+		end := (bookings)[i].Schedule.EndTime
+
+		switch {
+		case now.Before(start):
+			(bookings)[i].Status = domain.StatusUpcoming
+		case now.After(start) && now.Before(end):
+			(bookings)[i].Status = domain.StatusOngoing
+		case now.After(end):
+			(bookings)[i].IsReadyToFinish = true
+		}
+	}
 	return &bookings, nil
 }
 
 func (r *teacherRepository) CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string) error {
+	tx := r.db.WithContext(ctx).Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
 	var booking domain.Booking
 
-	// 🔍 Load booking + schedule to check timing
-	err := r.db.WithContext(ctx).
-		Preload("Schedule").
+	// 🔍 Load booking + schedule to verify ownership and timing
+	if err := tx.Preload("Schedule").
 		Where("id = ? AND status = ?", bookingID, "booked").
-		First(&booking).Error
-	if err != nil {
+		First(&booking).Error; err != nil {
+		tx.Rollback()
 		return errors.New("booking tidak ditemukan atau sudah dibatalkan")
 	}
 
-	// ✅ Ensure the booking belongs to this teacher
+	// ✅ Check that this teacher owns the booking
 	if booking.Schedule.TeacherUUID != teacherUUID {
+		tx.Rollback()
 		return errors.New("anda tidak memiliki akses ke booking ini")
 	}
 
-	// 🕐 Compute the next scheduled class datetime
+	// 🕐 Check if cancellation is within allowed time window (H-1)
 	classDate := utils.GetNextClassDate(booking.Schedule.DayOfWeek, booking.Schedule.StartTime)
-	now := time.Now()
-
-	// Check if it's less than 24 hours before class
-	if classDate.Sub(now) < 24*time.Hour {
+	if time.Until(classDate) < 24*time.Hour {
+		tx.Rollback()
 		return errors.New("pembatalan hanya dapat dilakukan maksimal H-1 sebelum kelas dimulai")
 	}
 
-	// 🔁 Perform cancellation
+	// 🔁 Mark booking as cancelled
 	cancelTime := time.Now()
-	err = r.db.WithContext(ctx).Model(&domain.Booking{}).
+	if err := tx.Model(&domain.Booking{}).
 		Where("id = ?", booking.ID).
 		Updates(map[string]interface{}{
 			"status":       "cancelled",
 			"cancelled_at": cancelTime,
-		}).Error
-	if err != nil {
-		return err
+		}).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal membatalkan booking: %w", err)
+	}
+
+	// 🧾 Refund student’s quota (if linked to a package)
+	var classHistory domain.ClassHistory
+	if err := tx.Where("booking_id = ?", booking.ID).First(&classHistory).Error; err == nil {
+		if classHistory.PackageID != nil {
+			if err := tx.Model(&domain.StudentPackage{}).
+				Where("student_uuid = ? AND package_id = ?", booking.StudentUUID, *classHistory.PackageID).
+				UpdateColumn("remaining_quota", gorm.Expr("remaining_quota + ?", 1)).
+				Error; err != nil {
+				tx.Rollback()
+				return fmt.Errorf("gagal mengembalikan kuota paket: %w", err)
+			}
+		}
+	}
+
+	// ✅ Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("gagal menyimpan pembatalan: %w", err)
 	}
 
 	return nil

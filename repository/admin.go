@@ -55,13 +55,10 @@ func (r *adminRepo) UpdatePackage(ctx context.Context, pkg *domain.Package) erro
 		return errors.New(utils.TranslateDBError(err))
 	}
 
-	utils.PrintDTO("packages coming", pkg)
-
 	//check the name
 	var nameExistStruct domain.Package
 	err := r.db.WithContext(ctx).Model(&domain.Package{}).Where("name = ? AND id != ? AND deleted_at IS NULL", pkg.Name, pkg.ID).First(&nameExistStruct).Error
 	if err == nil {
-		utils.PrintDTO("hasilfetch", nameExistStruct)
 
 		return errors.New("nama paket sudah digunakan")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {

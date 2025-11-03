@@ -1,6 +1,9 @@
 package dto
 
-import "chronosphere/domain"
+import (
+	"chronosphere/domain"
+	"time"
+)
 
 type AddAvailabilityRequest struct {
 	DayOfWeek string   `json:"day_of_week" binding:"required"`
@@ -62,6 +65,44 @@ func MapCreateTeacherRequestToUser(req *CreateTeacherRequest) *domain.User {
 			Instruments: mapInstrumentIDs(req.InstrumentIDs),
 		},
 	}
+}
+
+type FinishClassRequest struct {
+	InstrumentID int      `json:"instrument_id" binding:"required"`
+	PackageID    *int     `json:"package_id,omitempty"`          // optional, only if class used a package
+	Date         string   `json:"date" binding:"required"`       // e.g. "2025-11-03"
+	StartTime    string   `json:"start_time" binding:"required"` // e.g. "14:00"
+	EndTime      string   `json:"end_time" binding:"required"`   // e.g. "15:00"
+	Notes        string   `json:"notes" binding:"required"`      // progress note from teacher (required)
+	DocumentURLs []string `json:"documentations,omitempty"`      // optional, list of uploaded file URLs
+}
+
+// ✅ Converts DTO → domain.ClassHistory (for repository/usecase)
+func MapFinishClassRequestToClassHistory(req *FinishClassRequest, bookingID int, teacherUUID string) domain.ClassHistory {
+	parsedDate, _ := time.Parse("2006-01-02", req.Date)
+
+	history := domain.ClassHistory{
+		BookingID:    bookingID,
+		TeacherUUID:  teacherUUID,
+		InstrumentID: req.InstrumentID,
+		PackageID:    req.PackageID,
+		Date:         parsedDate,
+		StartTime:    req.StartTime,
+		EndTime:      req.EndTime,
+		Notes:        &req.Notes,
+		Status:       domain.StatusCompleted,
+	}
+
+	// Add documentation URLs if provided
+	if len(req.DocumentURLs) > 0 {
+		for _, url := range req.DocumentURLs {
+			history.Documentations = append(history.Documentations, domain.ClassDocumentation{
+				URL: url,
+			})
+		}
+	}
+
+	return history
 }
 
 func MapUpdateTeacherRequestToUser(req *UpdateTeacherProfileRequest) *domain.User {

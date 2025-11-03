@@ -3,9 +3,15 @@ package domain
 import "time"
 
 const (
-	RoleAdmin   = "admin"
-	RoleTeacher = "teacher"
-	RoleStudent = "student"
+	RoleAdmin         = "admin"
+	RoleTeacher       = "teacher"
+	RoleStudent       = "student"
+	StatusBooked      = "booked"
+	StatusCompleted   = "completed"
+	StatusCancelled   = "cancelled"
+	StatusRescheduled = "rescheduled"
+	StatusOngoing     = "ongoing"
+	StatusUpcoming    = "upcoming"
 )
 
 type User struct {
@@ -80,6 +86,9 @@ type Booking struct {
 
 	Schedule TeacherSchedule `gorm:"foreignKey:ScheduleID" json:"schedule"`
 	Student  User            `gorm:"foreignKey:StudentUUID;references:UUID" json:"student"`
+
+	// Computed field, not saved to DB
+	IsReadyToFinish bool `gorm:"-" json:"is_ready_to_finish"`
 }
 
 type TeacherSchedule struct {

@@ -34,8 +34,80 @@ func NewTeacherHandler(app *gin.Engine, tc domain.TeacherUseCase, jwtManager *ut
 		teacher.DELETE("/delete-available-class/:id", h.DeleteAddAvailability)
 		teacher.GET("/booked", h.GetAllBookedClass)
 		teacher.PUT("/cancel-booked-class/:id", h.CancelBookedClass)
+		teacher.PUT("/finish-class/:id", h.FinishClass)
 
 	}
+}
+
+func (h *TeacherHandler) FinishClass(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+
+	// ✅ Get teacher UUID from context
+	uuidVal, exists := c.Get("userUUID")
+	if !exists {
+		utils.PrintLogInfo(&name, http.StatusUnauthorized, "FinishClass - MissingUserUUID", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to finish class",
+		})
+		return
+	}
+	teacherUUID := uuidVal.(string)
+
+	// ✅ Parse booking ID from URL param
+	bookingID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		utils.PrintLogInfo(&name, http.StatusBadRequest, "FinishClass - InvalidBookingID", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid booking ID",
+			"message": "Failed to finish class",
+		})
+		return
+	}
+
+	// ✅ Bind JSON body to DTO
+	var req dto.FinishClassRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.PrintLogInfo(&name, http.StatusBadRequest, "FinishClass - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   utils.TranslateValidationError(err),
+			"message": "Failed to finish class",
+		})
+		return
+	}
+
+	// ✅ Map DTO → domain model
+	payload := dto.MapFinishClassRequestToClassHistory(&req, bookingID, teacherUUID)
+
+	// ✅ Call usecase
+	if err := h.tc.FinishClass(c.Request.Context(), bookingID, teacherUUID, payload); err != nil {
+		status := http.StatusInternalServerError
+
+		// Optional: make better HTTP status codes for expected errors
+		if strings.Contains(err.Error(), "tidak ditemukan") || strings.Contains(err.Error(), "tidak memiliki akses") {
+			status = http.StatusForbidden
+		} else if strings.Contains(err.Error(), "sudah") {
+			status = http.StatusBadRequest
+		}
+
+		utils.PrintLogInfo(&name, status, "FinishClass - UseCase", &err)
+		c.JSON(status, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to finish class",
+		})
+		return
+	}
+
+	// ✅ Success
+	utils.PrintLogInfo(&name, http.StatusOK, "FinishClass", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Class finished successfully",
+	})
 }
 
 func (h *TeacherHandler) CancelBookedClass(c *gin.Context) {
@@ -284,7 +356,6 @@ func (th *TeacherHandler) UpdateTeacherData(c *gin.Context) {
 	}
 
 	filtered := dto.MapCreateTeacherRequestToUserByTeacher(&req)
-	utils.PrintDTO("filtered", filtered)
 
 	if err := th.tc.UpdateTeacherData(c.Request.Context(), userUUID.(string), filtered); err != nil {
 		utils.PrintLogInfo(&name, 500, "UpdateTeacher - UseCase", &err)
