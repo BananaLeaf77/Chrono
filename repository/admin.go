@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgconn"
 	"gorm.io/gorm"
 )
 
@@ -195,7 +196,11 @@ func (r *adminRepo) CreateInstrument(ctx context.Context, instrument *domain.Ins
 		Where("name = ? AND deleted_at IS NULL", instrument.Name).
 		First(&existing).Error; err == nil {
 		// Sudah ada, return error user-friendly
-		return nil, errors.New(utils.TranslateDBError(errors.New("23505"))) // mimic unique violation
+		return nil, errors.New(utils.TranslateDBError(&pgconn.PgError{
+			Code:    "23505",
+			Message: "duplicate key value violates unique constraint \"instruments_name_key\"",
+		}))
+
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// Error lain saat check
 		return nil, errors.New(utils.TranslateDBError(err))

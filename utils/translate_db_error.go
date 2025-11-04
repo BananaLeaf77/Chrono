@@ -40,6 +40,9 @@ func TranslateDBError(err error) string {
 			if lang == "IDN" {
 				msg = strings.ReplaceAll(msg, "already exists", "sudah digunakan")
 			}
+			if lang == "IDN" {
+				msg = "Nilai duplikat, silakan gunakan yang lain"
+			}
 			return msg
 
 		case "23503":
