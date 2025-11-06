@@ -220,7 +220,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		utils.PrintLogInfo(nil, 400, "Register", &err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Invalid request payload",
+			"message": "Failed to register",
 			"error":   utils.TranslateValidationError(err),
 		})
 		return

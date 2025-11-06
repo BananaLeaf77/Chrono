@@ -1,0 +1,19 @@
+package dto
+
+import "chronosphere/domain"
+
+type UpdateStudentDataRequest struct {
+	Name  string  `json:"name" binding:"required,min=3,max=50"`
+	Email string  `json:"email" binding:"required,email"`
+	Phone string  `json:"phone" binding:"required,numeric,min=9,max=14"`
+	Image *string `json:"image" binding:"omitempty,url"`
+}
+
+func MapUpdateStudentRequestByStudent(req *UpdateStudentDataRequest) domain.User {
+	return domain.User{
+		Name:  req.Name,
+		Email: req.Email,
+		Phone: req.Phone,
+		Image: req.Image,
+	}
+}

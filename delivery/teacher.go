@@ -219,7 +219,7 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 
 	teacherUUID, exists := c.Get("userUUID")
 	if !exists {
-		utils.PrintLogInfo(&name, 401, "GetMyProfile", nil)
+		utils.PrintLogInfo(&name, 401, "AddAvailability", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "Failed to Add Availability",
@@ -271,7 +271,7 @@ func (th *TeacherHandler) GetMySchedules(c *gin.Context) {
 	name := utils.GetAPIHitter(c)
 	userUUID, exists := c.Get("userUUID")
 	if !exists {
-		utils.PrintLogInfo(&name, 401, "GetMyProfile", nil)
+		utils.PrintLogInfo(&name, 401, "GetMySchedules", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"error":   "Unauthorized: missing user context",

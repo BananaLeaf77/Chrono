@@ -34,6 +34,14 @@ func (r *adminRepo) UpdateInstrument(ctx context.Context, instrument *domain.Ins
 		return errors.New(utils.TranslateDBError(err))
 	}
 
+	// ✅ Cek apakah nama instrument sudah dipakai oleh instrument lain
+	err := r.db.WithContext(ctx).Model(&domain.Instrument{}).Where("name = ? AND id != ? AND deleted_at IS NULL", instrument.Name, instrument.ID).Error
+	if err == nil {
+		return errors.New("nama instrumen sudah digunakan")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return errors.New(utils.TranslateDBError(err))
+	}
+
 	// ✅ Update data instrument
 	if err := r.db.WithContext(ctx).Save(instrument).Error; err != nil {
 		return errors.New(utils.TranslateDBError(err)) // pakai translator
@@ -85,7 +93,6 @@ func (r *adminRepo) UpdatePackage(ctx context.Context, pkg *domain.Package) erro
 	return nil
 }
 
-// AssignPackageToStudent assigns a package to a student
 // AssignPackageToStudent assigns a package to a student
 func (r *adminRepo) AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error {
 	tx := r.db.WithContext(ctx).Begin()

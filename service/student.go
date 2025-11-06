@@ -17,9 +17,6 @@ func (s *studentUseCase) GetMyProfile(ctx context.Context, userUUID string) (*do
 	return s.repo.GetMyProfile(ctx, userUUID)
 }
 
-func (s *studentUseCase) UpdateStudentData(ctx context.Context, userUUID string, user *domain.User) error {
-	if user == nil {
-		return nil
-	}
+func (s *studentUseCase) UpdateStudentData(ctx context.Context, userUUID string, user domain.User) error {
 	return s.repo.UpdateStudentData(ctx, userUUID, user)
 }
