@@ -23,28 +23,29 @@ func NewAdminRepository(db *gorm.DB) domain.AdminRepository {
 func (r *adminRepo) UpdateInstrument(ctx context.Context, instrument *domain.Instrument) error {
 	var existing domain.Instrument
 
-	// ✅ Cek apakah instrument ada dan belum dihapus (soft delete)
-	if err := r.db.WithContext(ctx).
-		Where("id = ? AND deleted_at IS NULL", instrument.ID).
-		First(&existing).Error; err != nil {
-
+	err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", instrument.ID).First(&existing).Error
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New(utils.TranslateDBError(err)) // pakai translator
+			return errors.New("instrumen tidak ditemukan")
 		}
 		return errors.New(utils.TranslateDBError(err))
 	}
 
-	// ✅ Cek apakah nama instrument sudah dipakai oleh instrument lain
-	err := r.db.WithContext(ctx).Model(&domain.Instrument{}).Where("name = ? AND id != ? AND deleted_at IS NULL", instrument.Name, instrument.ID).Error
-	if err == nil {
-		return errors.New("nama instrumen sudah digunakan")
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+	var count int64
+	err = r.db.WithContext(ctx).
+		Model(&domain.Instrument{}).
+		Where("name = ? AND id != ? AND deleted_at IS NULL", instrument.Name, instrument.ID).
+		Count(&count).Error
+	if err != nil {
 		return errors.New(utils.TranslateDBError(err))
 	}
+	if count > 0 {
+		return errors.New("nama instrumen sudah digunakan")
+	}
 
-	// ✅ Update data instrument
+	// ✅ Update the instrument
 	if err := r.db.WithContext(ctx).Save(instrument).Error; err != nil {
-		return errors.New(utils.TranslateDBError(err)) // pakai translator
+		return errors.New(utils.TranslateDBError(err))
 	}
 
 	return nil

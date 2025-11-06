@@ -221,6 +221,7 @@ func (h *AdminHandler) CreateTeacher(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   utils.TranslateValidationError(err),
+			"massage": "Failed to create teacher",
 		})
 		return
 	}
@@ -234,6 +235,7 @@ func (h *AdminHandler) CreateTeacher(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   utils.TranslateDBError(err),
+			"massage": "Failed to create teacher",
 		})
 		return
 	}
@@ -255,6 +257,7 @@ func (h *AdminHandler) UpdateTeacher(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   utils.TranslateValidationError(err),
+			"massage": "Failed to update teacher profile",
 		})
 		return
 	}
@@ -267,6 +270,7 @@ func (h *AdminHandler) UpdateTeacher(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   utils.TranslateDBError(err),
+			"message": "Failed to update teacher profile",
 		})
 		return
 	}
@@ -357,12 +361,12 @@ func (h *AdminHandler) UpdateInstrument(c *gin.Context) {
 
 	if err := h.uc.UpdateInstrument(c.Request.Context(), inst); err != nil {
 		utils.PrintLogInfo(&name, 500, "UpdateInstrument - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to update instrument"})
 		return
 	}
 
 	utils.PrintLogInfo(&name, 200, "UpdateInstrument", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Instrument updated"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Instrument updated successfully"})
 }
 
 func (h *AdminHandler) DeleteInstrument(c *gin.Context) {
