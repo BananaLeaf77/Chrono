@@ -77,17 +77,22 @@ type Booking struct {
 	ID            int        `gorm:"primaryKey" json:"id"`
 	StudentUUID   string     `gorm:"type:uuid;not null" json:"student_uuid"`
 	ScheduleID    int        `gorm:"not null" json:"schedule_id"`
-	Status        string     `gorm:"size:20;default:'booked'" json:"status"` // booked | completed | cancelled | rescheduled
+	Status        string     `gorm:"size:20;default:'booked'" json:"status"`
 	BookedAt      time.Time  `gorm:"autoCreateTime" json:"booked_at"`
 	CompletedAt   *time.Time `json:"completed_at,omitempty"`
 	RescheduledAt *time.Time `json:"rescheduled_at,omitempty"`
 	CancelledAt   *time.Time `json:"cancelled_at,omitempty"`
-	Notes         *string    `json:"notes,omitempty"`
 
+	// 🔹 Siapa yang membatalkan (Teacher, Student, atau Admin)
+	CanceledBy *string `gorm:"type:uuid" json:"canceled_by,omitempty"`
+	CancelUser *User   `gorm:"foreignKey:CanceledBy;references:UUID" json:"cancel_user,omitempty"`
+
+	Notes *string `json:"notes,omitempty"`
+
+	// Relasi ke jadwal dan student
 	Schedule TeacherSchedule `gorm:"foreignKey:ScheduleID" json:"schedule"`
 	Student  User            `gorm:"foreignKey:StudentUUID;references:UUID" json:"student"`
 
-	// Computed field, not saved to DB
 	IsReadyToFinish bool `gorm:"-" json:"is_ready_to_finish"`
 }
 
@@ -101,6 +106,9 @@ type TeacherSchedule struct {
 	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt   *time.Time `gorm:"index" json:"deleted_at,omitempty"`
+
+	Teacher        User            `gorm:"foreignKey:TeacherUUID;references:UUID" json:"teacher"`
+	TeacherProfile *TeacherProfile `gorm:"foreignKey:UserUUID;references:TeacherUUID" json:"teacher_profile,omitempty"`
 }
 
 type ClassHistory struct {

@@ -9,7 +9,9 @@ type StudentUseCase interface {
 	UpdateStudentData(ctx context.Context, userUUID string, user User) error
 	GetAllAvailablePackages(ctx context.Context) (*[]Package, error)
 
+	BookClass(ctx context.Context, studentUUID string, scheduleID int) error
 	GetMyBookedClasses(ctx context.Context, studentUUID string) (*[]Booking, error)
+	CancelBookedClass(ctx context.Context, bookingID int, studentUUID string) error
 	GetAvailableSchedules(ctx context.Context, studentUUID string) (*[]TeacherSchedule, error)
 }
 
@@ -18,8 +20,8 @@ type StudentRepository interface {
 	UpdateStudentData(ctx context.Context, userUUID string, user User) error
 	GetAllAvailablePackages(ctx context.Context) (*[]Package, error)
 
+	BookClass(ctx context.Context, studentUUID string, scheduleID int) error
 	GetMyBookedClasses(ctx context.Context, studentUUID string) (*[]Booking, error)
-	GetAvailableSchedules(ctx context.Context, instrumentIDs []int) (*[]TeacherSchedule, error)
-
-	GetStudentInstrumentIDs(ctx context.Context, studentUUID string) ([]int, error)
+	CancelBookedClass(ctx context.Context, bookingID int, studentUUID string) error
+	GetAvailableSchedules(ctx context.Context, studentUUID string) (*[]TeacherSchedule, error)
 }

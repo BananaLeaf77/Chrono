@@ -94,6 +94,8 @@ func (r *adminRepo) UpdatePackage(ctx context.Context, pkg *domain.Package) erro
 	return nil
 }
 
+
+
 // AssignPackageToStudent assigns a package to a student
 func (r *adminRepo) AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error {
 	tx := r.db.WithContext(ctx).Begin()
@@ -193,6 +195,8 @@ func (r *adminRepo) CreatePackage(ctx context.Context, pkg *domain.Package) (*do
 	if err := r.db.WithContext(ctx).Create(pkg).Error; err != nil {
 		return nil, errors.New(utils.TranslateDBError(err))
 	}
+
+	pkg.Instrument.ID = pkg.InstrumentID
 	return pkg, nil
 }
 
@@ -259,6 +263,7 @@ func (r *adminRepo) GetAllUsers(ctx context.Context) ([]domain.User, error) {
 func (r *adminRepo) GetAllStudents(ctx context.Context) ([]domain.User, error) {
 	var students []domain.User
 	err := r.db.WithContext(ctx).
+		Preload("StudentProfile.Packages", "end_date >= ?", time.Now()).
 		Preload("StudentProfile.Packages.Package.Instrument").
 		Where("role = ? AND deleted_at IS NULL", domain.RoleStudent).
 		Find(&students).Error
@@ -270,6 +275,7 @@ func (r *adminRepo) GetAllStudents(ctx context.Context) ([]domain.User, error) {
 func (r *adminRepo) GetStudentByUUID(ctx context.Context, uuid string) (*domain.User, error) {
 	var student domain.User
 	err := r.db.WithContext(ctx).
+		Preload("StudentProfile.Packages", "end_date >= ?", time.Now()).
 		Preload("StudentProfile.Packages.Package.Instrument").
 		Where("uuid = ? AND role = ? AND deleted_at IS NULL", uuid, domain.RoleStudent).
 		First(&student).Error

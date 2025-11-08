@@ -13,6 +13,14 @@ func NewStudentUseCase(repo domain.StudentRepository) domain.StudentUseCase {
 	return &studentUseCase{repo: repo}
 }
 
+func (s *studentUseCase) CancelBookedClass(ctx context.Context, bookingID int, studentUUID string) error {
+	return s.repo.CancelBookedClass(ctx, bookingID, studentUUID)
+}
+
+func (s *studentUseCase) BookClass(ctx context.Context, studentUUID string, scheduleID int) error {
+	return s.repo.BookClass(ctx, studentUUID, scheduleID)
+}
+
 func (s *studentUseCase) GetMyProfile(ctx context.Context, userUUID string) (*domain.User, error) {
 	return s.repo.GetMyProfile(ctx, userUUID)
 }
@@ -30,12 +38,5 @@ func (s *studentUseCase) GetMyBookedClasses(ctx context.Context, studentUUID str
 }
 
 func (s *studentUseCase) GetAvailableSchedules(ctx context.Context, studentUUID string) (*[]domain.TeacherSchedule, error) {
-	// ✅ Get instrument IDs based on student’s packages
-	instrumentIDs, err := s.repo.GetStudentInstrumentIDs(ctx, studentUUID)
-	if err != nil {
-		return nil, err
-	}
-
-	// ✅ Get available schedules for given instrument IDs
-	return s.repo.GetAvailableSchedules(ctx, instrumentIDs)
+	return s.repo.GetAvailableSchedules(ctx, studentUUID)
 }

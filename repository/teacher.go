@@ -135,7 +135,7 @@ func (r *teacherRepository) AddAvailability(ctx context.Context, schedule *domai
 
 func (r *teacherRepository) GetMyProfile(ctx context.Context, userUUID string) (*domain.User, error) {
 	var teacher domain.User
-	if err := r.db.WithContext(ctx).Preload("TeacherProfile").Where("uuid = ? AND role = ?", userUUID, "teacher").First(&teacher).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("TeacherProfile.Instruments").Where("uuid = ? AND role = ?", userUUID, "teacher").First(&teacher).Error; err != nil {
 		return nil, err
 	}
 	return &teacher, nil

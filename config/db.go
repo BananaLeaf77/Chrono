@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"reflect"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -33,7 +34,7 @@ func BootDB() (*gorm.DB, *string, error) {
 	// Setup logger level (debug mode vs production)
 	var gormLogger logger.Interface
 	if os.Getenv("APP_ENV") == "development" {
-		gormLogger = logger.Default.LogMode(logger.Info) // show all SQL
+		gormLogger = logger.Default.LogMode(logger.Info) // show SQL
 	} else {
 		gormLogger = logger.Default.LogMode(logger.Silent)
 	}
@@ -51,14 +52,14 @@ func BootDB() (*gorm.DB, *string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	sqlDB.SetMaxIdleConns(10)           // idle connections
-	sqlDB.SetMaxOpenConns(100)          // max open connections
-	sqlDB.SetConnMaxLifetime(time.Hour) // max lifetime
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetConnMaxLifetime(time.Hour)
 	sqlDB.SetConnMaxIdleTime(30 * time.Minute)
 
-	// Auto migrate semua schema
-	err = db.AutoMigrate(
-		// Base entities first
+	// 🔄 Migrate in dependency-safe order
+	models := []interface{}{
+		// Base
 		&domain.User{},
 		&domain.Instrument{},
 
@@ -66,26 +67,31 @@ func BootDB() (*gorm.DB, *string, error) {
 		&domain.TeacherProfile{},
 		&domain.StudentProfile{},
 
-		// Package related tables (depend on Instrument)
+		// Packages
 		&domain.Package{},
 		&domain.StudentPackage{},
 
-		// Schedule and booking (depend on User)
+		// Schedule & Booking (depend on User, TeacherProfile)
 		&domain.TeacherSchedule{},
 		&domain.Booking{},
 
-		// Class and documentation (depend on Booking, User, Package, Instrument)
+		// Class & Docs
 		&domain.ClassHistory{},
 		&domain.ClassDocumentation{},
-	)
-	if err != nil {
-		log.Fatal("❌ Failed to ", utils.ColorText("auto-migrate database schemas", utils.Red), " error: ", err)
-		return nil, nil, err
 	}
 
-	// Seed initial admin user
+	for _, m := range models {
+		modelName := reflect.TypeOf(m).Elem().Name()
+		if err := db.AutoMigrate(m); err != nil {
+			log.Fatalf("❌ Failed to migrate model %s: %v", modelName, err)
+			return nil, nil, err
+		}
+		log.Printf("✅ Migrated %s", modelName)
+	}
+
+	// ✅ Seed initial admin user
 	var count int64
-	db.Model(&domain.User{}).Where("role = ?", "admin").Count(&count)
+	db.Model(&domain.User{}).Where("role = ?", domain.RoleAdmin).Count(&count)
 	if count == 0 {
 		adminEmail := os.Getenv("ADMIN_EMAIL")
 		adminPass := os.Getenv("ADMIN_PASSWORD")
@@ -99,40 +105,32 @@ func BootDB() (*gorm.DB, *string, error) {
 				Email:    adminEmail,
 				Phone:    adminPhone,
 				Password: string(hashed),
-				Role:     "admin",
+				Role:     domain.RoleAdmin,
 			}
-
 			if err := db.Create(&adminUser).Error; err != nil {
 				log.Fatalf("❌ Failed to seed admin user: %v", err)
 			} else {
 				log.Printf("✅ Seeded admin user: %s", adminEmail)
 			}
 		} else {
-			log.Print("⚠️ Skipping admin seeding, missing ADMIN_EMAIL or ADMIN_PASSWORD in env")
+			log.Print("⚠️ Skipping admin seeding — missing ADMIN_EMAIL or ADMIN_PASSWORD in env")
 		}
 	}
 
-	// ✅ Seed common instruments if they don't exist
+	// ✅ Seed common instruments if missing
 	commonInstruments := []string{
-		"Guitar",
-		"Piano",
-		"Violin",
-		"Drums",
-		"Bass",
-		"Ukulele",
-		"Vocal",
-		"Flute",
-		"Saxophone",
+		"Guitar", "Piano", "Violin", "Drums", "Bass",
+		"Ukulele", "Vocal", "Flute", "Saxophone",
 	}
 
-	for _, instrumentName := range commonInstruments {
-		var count int64
-		db.Model(&domain.Instrument{}).Where("name = ?", instrumentName).Count(&count)
-		if count == 0 {
-			if err := db.Create(&domain.Instrument{Name: instrumentName}).Error; err != nil {
-				log.Printf("⚠️ Failed to seed instrument '%s': %v", instrumentName, err)
+	for _, name := range commonInstruments {
+		var exists int64
+		db.Model(&domain.Instrument{}).Where("LOWER(name) = LOWER(?)", name).Count(&exists)
+		if exists == 0 {
+			if err := db.Create(&domain.Instrument{Name: name}).Error; err != nil {
+				log.Printf("⚠️ Failed to seed instrument '%s': %v", name, err)
 			} else {
-				log.Printf("✅ Seeded instrument: %s", instrumentName)
+				log.Printf("✅ Seeded instrument: %s", name)
 			}
 		}
 	}
