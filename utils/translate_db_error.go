@@ -41,7 +41,7 @@ func TranslateDBError(err error) string {
 				msg = strings.ReplaceAll(msg, "already exists", "sudah digunakan")
 			}
 			if lang == "IDN" {
-				msg = "Nilai duplikat, silakan gunakan yang lain"
+				msg = "Data sudah data, silakan gunakan yang lain"
 			}
 			return msg
 
