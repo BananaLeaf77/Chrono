@@ -229,7 +229,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	// role hardcoded student
 	if err := h.authUC.Register(
 		c.Request.Context(),
-		req.Email,
+		strings.ToLower(req.Email),
 		req.Name,
 		req.Phone,
 		req.Password,
@@ -296,9 +296,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.authUC.Login(c.Request.Context(), req.Email, req.Password)
+	loweredEmail := strings.ToLower(req.Email)
+	tokens, err := h.authUC.Login(c.Request.Context(), loweredEmail, req.Password)
 	if err != nil {
-		utils.PrintLogInfo(&req.Email, 401, "Login", &err)
+		utils.PrintLogInfo(&loweredEmail, 401, "Login", &err)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"message": "Login failed",
 			"success": false,
@@ -325,7 +326,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			true,  // ✅ HttpOnly
 		)
 
-		utils.PrintLogInfo(&req.Email, 200, "Login", nil)
+		utils.PrintLogInfo(&loweredEmail, 200, "Login", nil)
 		c.JSON(http.StatusOK, gin.H{
 			"success":      true,
 			"access_token": tokens.AccessToken,
@@ -335,6 +336,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// ✅ For MOBILE: return both tokens
+	utils.PrintLogInfo(&loweredEmail, 200, "Login", nil)
 	c.JSON(http.StatusOK, gin.H{
 		"success":       true,
 		"access_token":  tokens.AccessToken,

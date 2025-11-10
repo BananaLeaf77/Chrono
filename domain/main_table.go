@@ -3,9 +3,11 @@ package domain
 import "time"
 
 const (
-	RoleAdmin         = "admin"
-	RoleTeacher       = "teacher"
-	RoleStudent       = "student"
+	RoleAdmin      = "admin"
+	RoleTeacher    = "teacher"
+	RoleStudent    = "student"
+	RoleManagement = "management"
+
 	StatusBooked      = "booked"
 	StatusCompleted   = "completed"
 	StatusCancelled   = "cancelled"

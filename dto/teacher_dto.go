@@ -2,6 +2,7 @@ package dto
 
 import (
 	"chronosphere/domain"
+	"strings"
 	"time"
 )
 
@@ -55,7 +56,7 @@ func MapCreateTeacherRequestToUserByTeacher(req *UpdateTeacherProfileRequestByTe
 func MapCreateTeacherRequestToUser(req *CreateTeacherRequest) *domain.User {
 	return &domain.User{
 		Name:     req.Name,
-		Email:    req.Email,
+		Email:    strings.ToLower(req.Email),
 		Phone:    req.Phone,
 		Password: req.Password,
 		Role:     domain.RoleTeacher,

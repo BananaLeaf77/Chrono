@@ -94,8 +94,6 @@ func (r *adminRepo) UpdatePackage(ctx context.Context, pkg *domain.Package) erro
 	return nil
 }
 
-
-
 // AssignPackageToStudent assigns a package to a student
 func (r *adminRepo) AssignPackageToStudent(ctx context.Context, studentUUID string, packageID int) error {
 	tx := r.db.WithContext(ctx).Begin()

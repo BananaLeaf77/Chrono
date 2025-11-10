@@ -119,8 +119,8 @@ func BootDB() (*gorm.DB, *string, error) {
 
 	// ✅ Seed common instruments if missing
 	commonInstruments := []string{
-		"Guitar", "Piano", "Violin", "Drums", "Bass",
-		"Ukulele", "Vocal", "Flute", "Saxophone",
+		"guitar", "piano", "violin", "drums", "bass",
+		"ukulele", "vocal", "flute", "saxophone",
 	}
 
 	for _, name := range commonInstruments {

@@ -8,6 +8,7 @@ import (
 	"chronosphere/utils"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -228,7 +229,6 @@ func (h *AdminHandler) CreateTeacher(c *gin.Context) {
 
 	user := dto.MapCreateTeacherRequestToUser(&req)
 
-	// ✅ panggil dengan instrumentIDs
 	created, err := h.uc.CreateTeacher(c.Request.Context(), user, req.InstrumentIDs)
 	if err != nil {
 		utils.PrintLogInfo(&adminName, 500, "CreateTeacher - UseCase", &err)
@@ -326,7 +326,7 @@ func (h *AdminHandler) CreateInstrument(c *gin.Context) {
 		return
 	}
 
-	inst := &domain.Instrument{Name: req.Name}
+	inst := &domain.Instrument{Name: strings.ToLower(req.Name)}
 	created, err := h.uc.CreateInstrument(c.Request.Context(), inst)
 	if err != nil {
 		utils.PrintLogInfo(&name, 500, "CreateInstrument - UseCase", &err)
