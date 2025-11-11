@@ -322,7 +322,7 @@ func (r *studentRepository) UpdateStudentData(ctx context.Context, uuid string, 
 
 	// Cek apakah user exists dan belum dihapus
 	var existingUser domain.User
-	err := tx.Where("uuid = ? AND deleted_at IS NULL", uuid).First(&existingUser).Error
+	err := tx.Where("uuid = ? AND role = ? AND deleted_at IS NULL", uuid, domain.RoleStudent).First(&existingUser).Error
 	if err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
