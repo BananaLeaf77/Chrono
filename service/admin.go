@@ -19,6 +19,70 @@ func NewAdminService(adminRepo domain.AdminRepository) domain.AdminUseCase {
 	}
 }
 
+// Managers =====================================================================================================
+// TEACHER MANAGEMENT
+func (s *adminService) GetAllManagers(ctx context.Context) ([]domain.User, error) {
+	data, err := s.adminRepo.GetAllManagers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (s *adminService) CreateManager(ctx context.Context, user *domain.User) (*domain.User, error) {
+	if user.Name == "" || user.Email == "" || user.Phone == "" || user.Password == "" {
+		return nil, errors.New("semua field wajib diisi")
+	}
+
+	user.Role = domain.RoleManagement
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, errors.New("gagal mengenkripsi password")
+	}
+	user.Password = string(hashed)
+
+	created, err := s.adminRepo.CreateManager(ctx, user)
+	if err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	return created, nil
+}
+
+// ✅ Update Teacher Profile
+func (s *adminService) UpdateManager(ctx context.Context, user *domain.User) error {
+	if user.UUID == "" {
+		return errors.New("uuid tidak boleh kosong")
+	}
+
+	if err := s.adminRepo.UpdateManager(ctx, user); err != nil {
+		return errors.New(utils.TranslateDBError(err))
+	}
+	return nil
+}
+
+func (s *adminService) GetAllManager(ctx context.Context) ([]domain.User, error) {
+	teachers, err := s.adminRepo.GetAllManagers(ctx)
+	if err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+	return teachers, nil
+}
+
+func (s *adminService) GetManagerByUUID(ctx context.Context, uuid string) (*domain.User, error) {
+	if uuid == "" {
+		return nil, errors.New("uuid tidak boleh kosong")
+	}
+
+	teacher, err := s.adminRepo.GetManagerByUUID(ctx, uuid)
+	if err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+	return teacher, nil
+}
+
 func (s *adminService) GetPackagesByID(ctx context.Context, id int) (*domain.Package, error) {
 	if id <= 0 {
 		return nil, errors.New("invalid package id")

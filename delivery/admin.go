@@ -30,6 +30,12 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 		admin.GET("/teachers", h.GetAllTeachers)
 		admin.GET("/teachers/:uuid", h.GetTeacherByUUID)
 
+		// Manager
+		admin.POST("/managers", h.CreateManager)
+		admin.PUT("/managers/modify/:uuid", h.UpdateManager)
+		admin.GET("/managers", h.GetAllManagers)
+		admin.GET("/managers/:uuid", h.GetManagerByUUID)
+
 		// Student
 		admin.GET("/students", h.GetAllStudents)
 		admin.GET("/students/:uuid", h.GetStudentByUUID)
@@ -212,7 +218,7 @@ func (h *AdminHandler) AssignPackageToStudent(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Package assigned to student successfully", "success": true})
 }
 
-// TEACHER MANAGEMENT =====================================================================================================
+// TEACHER =====================================================================================================
 func (h *AdminHandler) CreateTeacher(c *gin.Context) {
 	var req dto.CreateTeacherRequest // pakai DTO
 	adminName := utils.GetAPIHitter(c)
@@ -244,6 +250,7 @@ func (h *AdminHandler) CreateTeacher(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"data":    created,
+		"message": "Teacher created successfully",
 	})
 }
 
@@ -286,11 +293,11 @@ func (h *AdminHandler) GetAllTeachers(c *gin.Context) {
 	teachers, err := h.uc.GetAllTeachers(c.Request.Context())
 	if err != nil {
 		utils.PrintLogInfo(nil, 500, "GetAllTeachers - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to retrieve teachers"})
 		return
 	}
 	utils.PrintLogInfo(nil, 200, "GetAllTeachers", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": teachers})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": teachers, "message": "Teachers retrieved successfully"})
 }
 
 func (h *AdminHandler) GetTeacherByUUID(c *gin.Context) {
@@ -298,12 +305,112 @@ func (h *AdminHandler) GetTeacherByUUID(c *gin.Context) {
 	teacher, err := h.uc.GetTeacherByUUID(c.Request.Context(), uuid)
 	if err != nil {
 		utils.PrintLogInfo(&uuid, 500, "GetTeacherByUUID - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to retrieve teacher"})
 		return
 	}
 
 	utils.PrintLogInfo(&uuid, 200, "GetTeacherByUUID", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": teacher})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": teacher, "message": "Teacher retrieved successfully"})
+}
+
+// Managers =====================================================================================================
+func (h *AdminHandler) CreateManager(c *gin.Context) {
+	var req dto.CreateManagerRequest // pakai DTO
+	adminName := utils.GetAPIHitter(c)
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.PrintLogInfo(&adminName, 400, "CreateManager - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   utils.TranslateValidationError(err),
+			"massage": "Failed to create manager",
+		})
+		return
+	}
+
+	user := dto.MapCreateManagerRequestToUser(&req)
+
+	created, err := h.uc.CreateManager(c.Request.Context(), user)
+	if err != nil {
+		utils.PrintLogInfo(&adminName, 500, "CreateManager - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   utils.TranslateDBError(err),
+			"massage": "Failed to create manager",
+		})
+		return
+	}
+
+	utils.PrintLogInfo(&adminName, 201, "CreateManager", nil)
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"data":    created,
+		"message": "Manager created successfully",
+	})
+}
+
+func (h *AdminHandler) UpdateManager(c *gin.Context) {
+	uuid := c.Param("uuid") // ambil UUID dari URL
+	var req dto.UpdateManagerProfileRequest
+	adminName := utils.GetAPIHitter(c)
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.PrintLogInfo(&adminName, 400, "UpdateManager - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   utils.TranslateValidationError(err),
+			"massage": "Failed to update manager profile",
+		})
+		return
+	}
+
+	user := dto.MapUpdateManagerRequestToUser(&req)
+	user.UUID = uuid // assign dari URL, bukan dari JSON
+
+	if err := h.uc.UpdateManager(c.Request.Context(), user); err != nil {
+		utils.PrintLogInfo(&adminName, 500, "UpdateManager - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   utils.TranslateDBError(err),
+			"message": "Failed to update manager profile",
+		})
+		return
+	}
+
+	utils.PrintLogInfo(&adminName, 200, "UpdateManager", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Manager profile updated",
+	})
+}
+
+func (h *AdminHandler) GetAllManagers(c *gin.Context) {
+	managers, err := h.uc.GetAllManagers(c.Request.Context())
+	if err != nil {
+		utils.PrintLogInfo(nil, 500, "GetAllManagers - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to retrieve managers",
+		},
+		)
+		return
+	}
+	utils.PrintLogInfo(nil, 200, "GetAllManagers", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": managers, "message": "Managers retrieved successfully"})
+}
+
+func (h *AdminHandler) GetManagerByUUID(c *gin.Context) {
+	uuid := c.Param("uuid")
+	teacher, err := h.uc.GetManagerByUUID(c.Request.Context(), uuid)
+	if err != nil {
+		utils.PrintLogInfo(&uuid, 500, "GetManagerByUUID - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to retrieve manager"})
+		return
+	}
+
+	utils.PrintLogInfo(&uuid, 200, "GetManagerByUUID", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": teacher, "message": "Manager retrieved successfully"})
 }
 
 func (h *AdminHandler) DeleteUser(c *gin.Context) {

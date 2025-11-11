@@ -20,6 +20,139 @@ func NewAdminRepository(db *gorm.DB) domain.AdminRepository {
 	return &adminRepo{db: db}
 }
 
+// Managers
+func (r *adminRepo) CreateManager(ctx context.Context, user *domain.User) (*domain.User, error) {
+	tx := r.db.WithContext(ctx).Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 1️⃣ Pastikan user belum ada (by email / phone)
+	var existing domain.User
+	if err := tx.
+		Where("(email = ? OR phone = ?) AND deleted_at IS NULL", user.Email, user.Phone).
+		First(&existing).Error; err == nil {
+		tx.Rollback()
+		return nil, errors.New("email atau nomor telepon sudah digunakan")
+	}
+
+	// 2️⃣ Set StudentProfile ke nil karena ini function khusus buat teacher
+	user.StudentProfile = nil
+	user.TeacherProfile = nil
+
+	// 3️⃣ Buat user baru
+	if err := tx.Create(user).Error; err != nil {
+		tx.Rollback()
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	// 4️⃣ Refresh user untuk dapat UUID (jika belum ada)
+	if user.UUID == "" {
+		if err := tx.
+			Where("email = ? AND deleted_at IS NULL", user.Email).
+			First(user).Error; err != nil {
+			tx.Rollback()
+			return nil, errors.New("gagal mendapatkan UUID user")
+		}
+	}
+
+	// 8️⃣ Commit transaksi
+	if err := tx.Commit().Error; err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	return user, nil
+}
+
+func (r *adminRepo) UpdateManager(ctx context.Context, user *domain.User) error {
+	// Mulai transaction
+	tx := r.db.WithContext(ctx).Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Cek apakah user exists dan belum dihapus
+	var existingUser domain.User
+	err := tx.Where("uuid = ? AND deleted_at IS NULL", user.UUID).First(&existingUser).Error
+	if err != nil {
+		tx.Rollback()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("manager tidak ditemukan")
+		}
+		return fmt.Errorf("error mencari manager: %w", err)
+	}
+
+	// Check email duplicate dengan user lain
+	var emailCount int64
+	err = tx.Model(&domain.User{}).
+		Where("email = ? AND uuid != ? AND deleted_at IS NULL", user.Email, user.UUID).
+		Count(&emailCount).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error checking email: %w", err)
+	}
+	if emailCount > 0 {
+		tx.Rollback()
+		return errors.New("email sudah digunakan oleh user lain")
+	}
+
+	// Check phone duplicate dengan user lain
+	var phoneCount int64
+	err = tx.Model(&domain.User{}).
+		Where("phone = ? AND uuid != ? AND deleted_at IS NULL", user.Phone, user.UUID).
+		Count(&phoneCount).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error checking phone: %w", err)
+	}
+	if phoneCount > 0 {
+		tx.Rollback()
+		return errors.New("nomor telepon sudah digunakan oleh user lain")
+	}
+
+	// Update user data
+	err = tx.Model(&domain.User{}).
+		Where("uuid = ?", user.UUID).
+		Updates(user).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal memperbarui data manager: %w", err)
+	}
+
+	// Commit transaction jika semua berhasil
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("gagal commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (r *adminRepo) GetAllManagers(ctx context.Context) ([]domain.User, error) {
+	var teachers []domain.User
+	if err := r.db.WithContext(ctx).
+		Where("role = ? AND deleted_at IS NULL", domain.RoleManagement).
+		Find(&teachers).Error; err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	return teachers, nil
+}
+
+func (r *adminRepo) GetManagerByUUID(ctx context.Context, uuid string) (*domain.User, error) {
+	var teacher domain.User
+	if err := r.db.WithContext(ctx).
+		Where("uuid = ? AND role = ? AND deleted_at IS NULL", uuid, domain.RoleManagement).
+		First(&teacher).Error; err != nil {
+		return nil, errors.New(utils.TranslateDBError(err))
+	}
+
+	return &teacher, nil
+}
+
 func (r *adminRepo) UpdateInstrument(ctx context.Context, instrument *domain.Instrument) error {
 	var existing domain.Instrument
 
