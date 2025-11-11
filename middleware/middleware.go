@@ -59,3 +59,20 @@ func StudentAndAdminOnly() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func ManagerAndAdminOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := utils.GetAPIHitter(c)
+		role, exists := c.Get("role")
+		if !exists || role == domain.RoleManagement && role != domain.RoleTeacher && role != domain.RoleStudent {
+			utils.PrintLogInfo(&name, 403, "Admin and Manager only Middleware - Role Check", nil)
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "Admin and Manager access required",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}

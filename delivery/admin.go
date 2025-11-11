@@ -506,7 +506,7 @@ func (h *AdminHandler) GetAllPackages(c *gin.Context) {
 		return
 	}
 	utils.PrintLogInfo(&name, 200, "GetAllPackages", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": pkgs})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": pkgs, "message": "Packages retrieved successfully"})
 }
 
 func (h *AdminHandler) GetAllInstruments(c *gin.Context) {
@@ -519,18 +519,18 @@ func (h *AdminHandler) GetAllInstruments(c *gin.Context) {
 		return
 	}
 	utils.PrintLogInfo(&name, 200, "GetAllInstruments", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": insts})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": insts, "message": "Instruments retrieved successfully"})
 }
 
 func (h *AdminHandler) GetAllUsers(c *gin.Context) {
 	users, err := h.uc.GetAllUsers(c.Request.Context())
 	if err != nil {
 		utils.PrintLogInfo(nil, 500, "GetAllUsers - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to retrieve users"})
 		return
 	}
 	utils.PrintLogInfo(nil, 200, "GetAllUsers", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": users})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": users, "message": "Users retrieved successfully"})
 }
 
 func (h *AdminHandler) GetAllStudents(c *gin.Context) {
@@ -538,11 +538,11 @@ func (h *AdminHandler) GetAllStudents(c *gin.Context) {
 	students, err := h.uc.GetAllStudents(c.Request.Context())
 	if err != nil {
 		utils.PrintLogInfo(&name, 500, "GetAllStudents - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to retrieve students"})
 		return
 	}
 	utils.PrintLogInfo(&name, 200, "GetAllStudents", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": students})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": students, "message": "Students retrieved successfully"})
 }
 
 func (h *AdminHandler) GetStudentByUUID(c *gin.Context) {
@@ -551,10 +551,10 @@ func (h *AdminHandler) GetStudentByUUID(c *gin.Context) {
 	student, err := h.uc.GetStudentByUUID(c.Request.Context(), uuid)
 	if err != nil {
 		utils.PrintLogInfo(&name, 500, "GetStudentByUUID - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to retrieve student"})
 		return
 	}
 
 	utils.PrintLogInfo(&name, 200, "GetStudentByUUID", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": student})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": student, "message": "Student retrieved successfully"})
 }
