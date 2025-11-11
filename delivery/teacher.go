@@ -334,6 +334,7 @@ func (th *TeacherHandler) GetMyProfile(c *gin.Context) {
 func (th *TeacherHandler) UpdateTeacherData(c *gin.Context) {
 	name := utils.GetAPIHitter(c)
 	userUUID, exists := c.Get("userUUID")
+	
 	if !exists {
 		utils.PrintLogInfo(&name, 401, "GetMyProfile", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
