@@ -6,6 +6,7 @@ import (
 	"chronosphere/middleware"
 	"chronosphere/utils"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -54,31 +55,40 @@ func (h *ManagerHandler) GetStudentByUUID(c *gin.Context) {
 
 func (h *ManagerHandler) ModifyStudentPackageQuota(c *gin.Context) {
 	name := utils.GetAPIHitter(c)
+
 	studentUUID := c.Param("uuid")
-	packageIDStr := c.Param("package_id")
+	packageID, err := strconv.Atoi(c.Param("package_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Failed to modify student quota", "error": "Invalid package ID"})
+		return
+	}
+
 	var req struct {
-		IncomingQuota int `json:"incoming_quota"`
+		IncomingQuota int `json:"incoming_quota" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.PrintLogInfo(&name, 400, "ModifyStudentPackageQuota - BindJSON", &err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error(), "message": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   utils.TranslateValidationError(err),
+			"message": "Failed to modify student quota",
+		})
 		return
 	}
 
-	packageID, err := utils.StringToInt(packageIDStr)
-	if err != nil {
-		utils.PrintLogInfo(&name, 400, "ModifyStudentPackageQuota - StringToInt", &err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid package ID", "message": "Package ID must be an integer"})
-		return
-	}
-
-	err = h.uc.ModifyStudentPackageQuota(c.Request.Context(), studentUUID, packageID, req.IncomingQuota)
-	if err != nil {
+	if err := h.uc.ModifyStudentPackageQuota(c.Request.Context(), studentUUID, packageID, req.IncomingQuota); err != nil {
 		utils.PrintLogInfo(&name, 500, "ModifyStudentPackageQuota - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to modify package quota"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to modify student quota",
+		})
 		return
 	}
 
 	utils.PrintLogInfo(&name, 200, "ModifyStudentPackageQuota", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Package quota modified successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Package quota modified successfully",
+	})
 }

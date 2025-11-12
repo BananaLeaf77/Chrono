@@ -203,8 +203,8 @@ func (h *AuthHandler) ResendOTP(c *gin.Context) {
 }
 
 type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password" binding:"required"`
-	NewPassword string `json:"new_password" binding:"required"`
+	OldPassword string `json:"old_password" binding:"required,min=8,max=64"`
+	NewPassword string `json:"new_password" binding:"required,min=8,max=64"`
 }
 
 type RegisterRequest struct {
@@ -404,8 +404,9 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 }
 
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
-	emailThruToken := c.GetString("email")
-	if emailThruToken == "" {
+
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
 		utils.PrintLogInfo(nil, 401, "ChangePassword", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -413,28 +414,19 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 			"error":   "unauthorized"})
 		return
 	}
+
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.PrintLogInfo(&emailThruToken, 400, "ChangePassword", &err)
+		utils.PrintLogInfo(nil, 400, "ChangePassword", &err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Invalid request",
-			"error":   err.Error()})
-		return
-	}
-
-	userUUID, exists := c.Get("userUUID")
-	if !exists {
-		utils.PrintLogInfo(&emailThruToken, 401, "ChangePassword", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": "Failed to get user from context",
-			"error":   "unauthorized"})
+			"error":   utils.TranslateValidationError(err)})
 		return
 	}
 
 	if err := h.authUC.ChangePassword(c.Request.Context(), userUUID.(string), req.OldPassword, req.NewPassword); err != nil {
-		utils.PrintLogInfo(&emailThruToken, 401, "ChangePassword", &err)
+		utils.PrintLogInfo(nil, 401, "ChangePassword", &err)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "Failed to change password",
@@ -442,6 +434,6 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	utils.PrintLogInfo(&emailThruToken, 200, "ChangePassword", nil)
+	utils.PrintLogInfo(nil, 200, "ChangePassword", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Password changed successfully"})
 }

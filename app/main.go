@@ -40,11 +40,13 @@ func main() {
 	authRepo := repository.NewAuthRepository(db)
 	studentRepo := repository.NewStudentRepository(db)
 	teacherRepo := repository.NewTeacherRepository(db)
+	managerRepo := repository.NewManagerRepository(db)
 	adminRepo := repository.NewAdminRepository(db)
 	otpRepo := repository.NewOTPRedisRepository(redisAddr, "", 0)
 
 	// Init services
 	studentService := service.NewStudentUseCase(studentRepo)
+	managementService := service.NewManagerService(managerRepo)
 	adminService := service.NewAdminService(adminRepo)
 	teacherService := service.NewTeacherService(teacherRepo)
 
@@ -57,6 +59,7 @@ func main() {
 
 	// Init handlers (inject dependencies)s
 	delivery.NewAuthHandler(app, authService)
+	delivery.NewManagerHandler(app, managementService, authService.GetAccessTokenManager())
 	delivery.NewStudentHandler(app, studentService, authService.GetAccessTokenManager())
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
 	delivery.NewTeacherHandler(app, teacherService, authService.GetAccessTokenManager())
