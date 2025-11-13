@@ -7,6 +7,7 @@ import (
 	"chronosphere/middleware"
 	"chronosphere/utils"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,12 +24,119 @@ func NewStudentHandler(r *gin.Engine, studUC domain.StudentUseCase, jwtManager *
 	{
 		student.GET("/packages", handler.GetAllAvailablePackages)
 		student.GET("/profile", handler.GetMyProfile)
+		student.POST("/book", handler.BookClass)
 		student.GET("/booked", handler.GetMyBookedClasses)
 		student.GET("/classes", handler.GetAvailableSchedules)
 		student.PUT("/modify", handler.UpdateStudentData)
+		student.DELETE("/cancel/:booking_id", handler.CancelBookedClass)
 
 	}
 
+}
+
+func (h *StudentHandler) CancelBookedClass(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		utils.PrintLogInfo(&name, 401, "CancelBookedClass", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to cancel booked class",
+		})
+		return
+	}
+
+	// 🔹 Parse booking_id
+	bookid := c.Param("booking_id")
+	convertedID, err := strconv.Atoi(bookid)
+	if err != nil {
+		utils.PrintLogInfo(&name, 400, "CancelBookedClass", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid booking ID parameter",
+			"message": "Failed to cancel booked class",
+		})
+		return
+	}
+
+	// 🔹 Parse request body for optional reason
+	var req dto.CancelBookingRequest
+	if err := c.ShouldBindJSON(&req); err != nil && err.Error() != "EOF" {
+		utils.PrintLogInfo(&name, 400, "CancelBookedClass", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request body",
+			"message": "Failed to cancel booked class",
+		})
+		return
+	}
+
+	if req.Reason != nil && len(*req.Reason) == 0 {
+		req.Reason = nil
+	}
+
+	// 🔹 Call use case with reason
+	err = h.studUC.CancelBookedClass(c.Request.Context(), convertedID, userUUID.(string), req.Reason)
+	if err != nil {
+		utils.PrintLogInfo(&name, 500, "CancelBookedClass", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to cancel booked class",
+		})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "CancelBookedClass", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Booked class cancelled successfully",
+	})
+}
+
+func (h *StudentHandler) BookClass(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		utils.PrintLogInfo(&name, 401, "BookClass", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to Book Class",
+		})
+		return
+	}
+
+	var payload dto.BookClassRequest
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		utils.PrintLogInfo(&name, 400, "BookClass", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   utils.TranslateValidationError(err),
+			"message": "Failed to Book Class",
+		})
+		return
+	}
+
+	err := h.studUC.BookClass(c.Request.Context(), userUUID.(string), payload.ScheduleID)
+	if err != nil {
+		utils.PrintLogInfo(&name, 500, "BookClass", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to Book Class",
+		})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "BookClass", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Class Booked Successfully",
+	})
 }
 
 func (h *StudentHandler) GetAvailableSchedules(c *gin.Context) {

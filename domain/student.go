@@ -11,7 +11,7 @@ type StudentUseCase interface {
 
 	BookClass(ctx context.Context, studentUUID string, scheduleID int) error
 	GetMyBookedClasses(ctx context.Context, studentUUID string) (*[]Booking, error)
-	CancelBookedClass(ctx context.Context, bookingID int, studentUUID string) error
+	CancelBookedClass(ctx context.Context, bookingID int, studentUUID string, reason *string) error
 	GetAvailableSchedules(ctx context.Context, studentUUID string) (*[]TeacherSchedule, error)
 }
 
@@ -22,6 +22,6 @@ type StudentRepository interface {
 
 	BookClass(ctx context.Context, studentUUID string, scheduleID int) error
 	GetMyBookedClasses(ctx context.Context, studentUUID string) (*[]Booking, error)
-	CancelBookedClass(ctx context.Context, bookingID int, studentUUID string) error
+	CancelBookedClass(ctx context.Context, bookingID int, studentUUID string, reason *string) error
 	GetAvailableSchedules(ctx context.Context, studentUUID string) (*[]TeacherSchedule, error)
 }

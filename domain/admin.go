@@ -35,6 +35,9 @@ type AdminUseCase interface {
 	// Users
 	GetAllUsers(ctx context.Context) ([]User, error)
 	DeleteUser(ctx context.Context, uuid string) error
+
+	// Class
+	GetAllClassHistories(ctx context.Context) (*[]ClassHistory, error)
 }
 
 type AdminRepository interface {
@@ -70,4 +73,7 @@ type AdminRepository interface {
 	// Users
 	GetAllUsers(ctx context.Context) ([]User, error)
 	DeleteUser(ctx context.Context, uuid string) error
+
+	// Class
+	GetAllClassHistories(ctx context.Context) (*[]ClassHistory, error)
 }

@@ -189,21 +189,16 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 		utils.PrintLogInfo(&name, 400, "AddAvailability - BindJSON", &err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Failed to Add Availability",
+			"message": "Failed to add availability",
 			"error":   utils.TranslateValidationError(err),
 		})
 		return
 	}
 
-	// ✅ Validate day of week (Indonesian version)
+	// ✅ Validate day of week (Indonesian names, lowercased)
 	validDays := map[string]bool{
-		"senin":  true,
-		"selasa": true,
-		"rabu":   true,
-		"kamis":  true,
-		"jumat":  true,
-		"sabtu":  true,
-		"minggu": true,
+		"senin": true, "selasa": true, "rabu": true,
+		"kamis": true, "jumat": true, "sabtu": true, "minggu": true,
 	}
 
 	day := strings.ToLower(strings.TrimSpace(req.DayOfWeek))
@@ -211,22 +206,25 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 		utils.PrintLogInfo(&name, 400, "AddAvailability - InvalidDay", nil)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Failed to Add Availability",
-			"errror":  fmt.Sprintf("hari tidak sesuai: '%s'. gunakan nama hari yang valid (Senin–Minggu).", req.DayOfWeek),
+			"message": "Failed to add availability",
+			"error":   fmt.Sprintf("Hari tidak sesuai: '%s'. Gunakan nama hari yang valid (Senin–Minggu).", req.DayOfWeek),
 		})
 		return
 	}
 
 	teacherUUID, exists := c.Get("userUUID")
 	if !exists {
-		utils.PrintLogInfo(&name, 401, "AddAvailability", nil)
+		utils.PrintLogInfo(&name, 401, "AddAvailability - MissingUserUUID", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
-			"message": "Failed to Add Availability",
+			"message": "Failed to add availability",
 			"error":   "Unauthorized: missing user context",
 		})
 		return
 	}
+
+	teacherID := teacherUUID.(string)
+	ctx := c.Request.Context()
 
 	for _, startTimeStr := range req.Times {
 		startTime, err := time.Parse("15:04", startTimeStr)
@@ -234,36 +232,36 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 			utils.PrintLogInfo(&name, 400, "AddAvailability - InvalidTimeFormat", &err)
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
+				"message": "Failed to add availability",
 				"error":   fmt.Sprintf("Format jam tidak valid: %s (gunakan HH:mm, contoh 14:00)", startTimeStr),
-				"message": "Failed to Add Availability",
 			})
 			return
 		}
 
-		endTime := startTime.Add(1 * time.Hour)
+		endTime := startTime.Add(time.Hour)
 
 		schedule := &domain.TeacherSchedule{
-			TeacherUUID: teacherUUID.(string),
+			TeacherUUID: teacherID,
 			DayOfWeek:   cases.Title(language.Indonesian).String(day),
 			StartTime:   startTime,
 			EndTime:     endTime,
 		}
 
-		if err := h.tc.AddAvailability(c.Request.Context(), teacherUUID.(string), schedule); err != nil {
-			utils.PrintLogInfo(&name, 500, "AddAvailability - UseCase", &err)
+		if err := h.tc.AddAvailability(ctx, teacherID, schedule); err != nil {
+			utils.PrintLogInfo(&name, 500, "AddAvailability - UseCaseError", &err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
+				"message": "Failed to add availability",
 				"error":   err.Error(),
-				"message": "Failed to Add Availability",
 			})
 			return
 		}
 	}
 
-	utils.PrintLogInfo(&name, 200, "AddAvailability", nil)
+	utils.PrintLogInfo(&name, 200, "AddAvailability - Success", nil)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Jadwal tersedia berhasil ditambahkan",
+		"message": "Jadwal tersedia berhasil ditambahkan.",
 	})
 }
 
@@ -334,7 +332,7 @@ func (th *TeacherHandler) GetMyProfile(c *gin.Context) {
 func (th *TeacherHandler) UpdateTeacherData(c *gin.Context) {
 	name := utils.GetAPIHitter(c)
 	userUUID, exists := c.Get("userUUID")
-	
+
 	if !exists {
 		utils.PrintLogInfo(&name, 401, "GetMyProfile", nil)
 		c.JSON(http.StatusUnauthorized, gin.H{

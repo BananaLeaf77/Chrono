@@ -59,6 +59,9 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 
 		// Assign package to student
 		admin.POST("/assign-package", h.AssignPackageToStudent)
+
+		// Class Histories
+		admin.GET("/class-histories", h.GetAllClassHistories)
 	}
 }
 
@@ -93,23 +96,36 @@ type AssignPackageRequest struct {
 /* ---------- Handlers ---------- */
 // PACKAGE MANAGEMENT ======================================================================================================
 func (h *AdminHandler) GetPackagesByID(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil || id <= 0 {
-		utils.PrintLogInfo(&idStr, 400, "GetPackagesByID - Atoi", &err)
+		utils.PrintLogInfo(&name, 400, "GetPackagesByID - Atoi", &err)
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid package ID"})
 		return
 	}
 
 	pkg, err := h.uc.GetPackagesByID(c.Request.Context(), id)
 	if err != nil {
-		utils.PrintLogInfo(&idStr, 500, "GetPackagesByID - UseCase", &err)
+		utils.PrintLogInfo(&name, 500, "GetPackagesByID - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	utils.PrintLogInfo(&idStr, 200, "GetPackagesByID", nil)
+	utils.PrintLogInfo(&name, 200, "GetPackagesByID", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": pkg})
+}
+
+func (h *AdminHandler) GetAllClassHistories(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	histories, err := h.uc.GetAllClassHistories(c.Request.Context())
+	if err != nil {
+		utils.PrintLogInfo(&name, 500, "GetAllClassHistories - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to retrieve class histories"})
+		return
+	}
+	utils.PrintLogInfo(&name, 200, "GetAllClassHistories", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": histories})
 }
 
 func (h *AdminHandler) CreatePackage(c *gin.Context) {

@@ -298,6 +298,7 @@ func (r *teacherRepository) GetAllBookedClass(ctx context.Context, teacherUUID s
 	err := r.db.WithContext(ctx).
 		Preload("Student").
 		Preload("Schedule").
+		Preload("Schedule.Teacher").
 		Where("schedule_id IN (SELECT id FROM teacher_schedules WHERE teacher_uuid = ? AND deleted_at IS NULL)", teacherUUID).
 		Find(&bookings).Error
 

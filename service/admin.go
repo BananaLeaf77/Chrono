@@ -19,6 +19,15 @@ func NewAdminService(adminRepo domain.AdminRepository) domain.AdminUseCase {
 	}
 }
 
+func (s *adminService) GetAllClassHistories(ctx context.Context) (*[]domain.ClassHistory, error) {
+	data, err := s.adminRepo.GetAllClassHistories(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
 // Managers =====================================================================================================
 // TEACHER MANAGEMENT
 func (s *adminService) GetAllManagers(ctx context.Context) ([]domain.User, error) {

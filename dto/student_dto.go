@@ -17,3 +17,11 @@ func MapUpdateStudentRequestByStudent(req *UpdateStudentDataRequest) domain.User
 		Image: req.Image,
 	}
 }
+
+type BookClassRequest struct {
+	ScheduleID int `json:"schedule_id" binding:"required,min=1"`
+}
+
+type CancelBookingRequest struct {
+	Reason *string `json:"reason" binding:"omitempty,max=255"`
+}
