@@ -482,6 +482,9 @@ func (h *AdminHandler) UpdateInstrument(c *gin.Context) {
 		inst.Name = req.Name
 	}
 
+	loweredName := strings.ToLower(inst.Name)
+	inst.Name = loweredName
+
 	if err := h.uc.UpdateInstrument(c.Request.Context(), inst); err != nil {
 		utils.PrintLogInfo(&name, 500, "UpdateInstrument - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to update instrument"})
