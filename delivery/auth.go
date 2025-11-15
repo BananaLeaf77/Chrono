@@ -86,6 +86,19 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
+	// ✅ Check if user still exists in database
+	_, err = h.authUC.Me(c.Request.Context(), userUUID)
+	if err != nil {
+		// User deleted - clear cookie and reject
+		c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "User account not found",
+			"error":   "user_deleted",
+		})
+		return
+	}
+
 	// ✅ Generate new access token
 	newAccessToken, err := h.authUC.GetAccessTokenManager().GenerateToken(userUUID, role, name)
 	if err != nil {
