@@ -57,7 +57,7 @@ func (s *authService) ResendOTP(ctx context.Context, email string) error {
 		return fmt.Errorf("failed to get OTP: %w", err)
 	}
 	if data == nil {
-		return errors.New("no OTP found, please register or forgot password first")
+		return errors.New("no OTP found, please register or forgot pas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sword first")
 	}
 
 	// generate OTP baru

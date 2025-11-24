@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/jackc/pgconn"
@@ -61,7 +62,10 @@ func (r *adminRepo) CreateManager(ctx context.Context, user *domain.User) (*doma
 	// 2️⃣ Set StudentProfile ke nil karena ini function khusus buat teacher
 	user.StudentProfile = nil
 	user.TeacherProfile = nil
-
+	defImage := os.Getenv("DEFAULT_PROFILE_IMAGE")
+	if *user.Image == "" || user.Image == nil {
+		user.Image = &defImage
+	}
 	// 3️⃣ Buat user baru
 	if err := tx.Create(user).Error; err != nil {
 		tx.Rollback()
@@ -506,6 +510,10 @@ func (r *adminRepo) CreateTeacher(ctx context.Context, user *domain.User, instru
 	}
 	// 2️⃣ Set StudentProfile ke nil karena ini function khusus buat teacher
 	user.StudentProfile = nil
+	defImage := os.Getenv("DEFAULT_PROFILE_IMAGE")
+	if *user.Image == "" || user.Image == nil {
+		user.Image = &defImage
+	}
 
 	// 3️⃣ Buat user baru
 	if err := tx.Create(user).Error; err != nil {

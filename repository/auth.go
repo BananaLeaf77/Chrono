@@ -3,6 +3,7 @@ package repository
 import (
 	"chronosphere/domain"
 	"context"
+	"os"
 
 	"gorm.io/gorm"
 )
@@ -32,6 +33,11 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 }
 
 func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) error {
+	defImage := os.Getenv("DEFAULT_PROFILE_IMAGE")
+
+	if *user.Image == "" || user.Image == nil {
+		user.Image = &defImage
+	}
 	return r.db.WithContext(ctx).Create(user).Error
 }
 
