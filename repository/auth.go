@@ -35,12 +35,13 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) error {
 	defImage := os.Getenv("DEFAULT_PROFILE_IMAGE")
 
-	if *user.Image == "" || user.Image == nil {
+	// FIX: Check if Image is nil first, then check if it's empty
+	if user.Image == nil || *user.Image == "" {
 		user.Image = &defImage
 	}
+
 	return r.db.WithContext(ctx).Create(user).Error
 }
-
 func (r *userRepository) GetAllUsers(ctx context.Context) ([]domain.User, error) {
 	var users []domain.User
 	if err := r.db.WithContext(ctx).

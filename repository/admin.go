@@ -63,7 +63,9 @@ func (r *adminRepo) CreateManager(ctx context.Context, user *domain.User) (*doma
 	user.StudentProfile = nil
 	user.TeacherProfile = nil
 	defImage := os.Getenv("DEFAULT_PROFILE_IMAGE")
-	if *user.Image == "" || user.Image == nil {
+
+	// FIX: Check if Image is nil first, then check if it's empty
+	if user.Image == nil || *user.Image == "" {
 		user.Image = &defImage
 	}
 	// 3️⃣ Buat user baru
@@ -511,7 +513,9 @@ func (r *adminRepo) CreateTeacher(ctx context.Context, user *domain.User, instru
 	// 2️⃣ Set StudentProfile ke nil karena ini function khusus buat teacher
 	user.StudentProfile = nil
 	defImage := os.Getenv("DEFAULT_PROFILE_IMAGE")
-	if *user.Image == "" || user.Image == nil {
+
+	// FIX: Check if Image is nil first, then check if it's empty
+	if user.Image == nil || *user.Image == "" {
 		user.Image = &defImage
 	}
 
