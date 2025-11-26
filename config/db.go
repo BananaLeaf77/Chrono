@@ -138,3 +138,34 @@ func BootDB() (*gorm.DB, *string, error) {
 	log.Print("✅ Connected to ", utils.ColorText("Database", utils.Green), " successfully")
 	return db, &address, nil
 }
+
+func seedForTesting(db *gorm.DB) error {
+	defImageUser := os.Getenv("DEFAULT_PROFILE_IMAGE")
+
+	// Seed additional data for testing environment if needed
+	student := domain.User{
+		Name:     "Dog",
+		Email:    "dognub61@gmail.com",
+		Phone:    "08976238373",
+		Password: "user123123",
+		Role:     domain.RoleStudent,
+		Image:    &defImageUser,
+	}
+	if err := db.Create(&student).Error; err != nil {
+		return err
+	}
+
+	teacher := domain.User{
+		Name:     "Teacher",
+		Email:    "john.mayer@example.com",
+		Phone:    "0848219323",
+		Password: "securepass123",
+		Role:     domain.RoleTeacher,
+		Image:    &defImageUser,
+	}
+	if err := db.Create(&teacher).Error; err != nil {
+		return err
+	}
+
+	return nil
+}

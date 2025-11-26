@@ -59,8 +59,8 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		PackageID:    payload.PackageID,
 		Status:       domain.StatusCompleted,
 		Date:         now,
-		StartTime:    booking.Schedule.StartTime.Format("15:04"),
-		EndTime:      booking.Schedule.EndTime.Format("15:04"),
+		StartTime:    booking.Schedule.StartTime,
+		EndTime:      booking.Schedule.EndTime,
 		Notes:        payload.Notes,
 	}
 

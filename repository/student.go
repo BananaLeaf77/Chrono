@@ -183,8 +183,6 @@ func (r *studentRepository) BookClass(ctx context.Context, studentUUID string, s
 
 	// 8️⃣ Create class history
 	classDate := utils.GetNextClassDate(schedule.DayOfWeek, schedule.StartTime)
-	startStr := schedule.StartTime.Format("15:04")
-	endStr := schedule.EndTime.Format("15:04")
 
 	classHistory := domain.ClassHistory{
 		BookingID:    newBooking.ID,
@@ -193,8 +191,8 @@ func (r *studentRepository) BookClass(ctx context.Context, studentUUID string, s
 		InstrumentID: selectedPackage.Package.InstrumentID,
 		PackageID:    &selectedPackage.PackageID,
 		Date:         classDate,
-		StartTime:    startStr,
-		EndTime:      endStr,
+		StartTime:    schedule.StartTime,
+		EndTime:      schedule.EndTime,
 		Status:       domain.StatusBooked,
 	}
 

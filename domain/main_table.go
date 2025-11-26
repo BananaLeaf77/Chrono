@@ -122,8 +122,8 @@ type ClassHistory struct {
 	PackageID    *int      `json:"package_id,omitempty"`
 	Status       string    `gorm:"size:20;default:'completed'" json:"status"`
 	Date         time.Time `gorm:"not null" json:"date"`
-	StartTime    string    `gorm:"not null" json:"start_time"`
-	EndTime      string    `gorm:"not null" json:"end_time"`
+	StartTime    time.Time `gorm:"not null" json:"start_time"`
+	EndTime      time.Time `gorm:"not null" json:"end_time"`
 	Notes        *string   `json:"notes,omitempty"`
 
 	Instrument     Instrument           `gorm:"foreignKey:InstrumentID" json:"instrument"`

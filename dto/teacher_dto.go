@@ -69,13 +69,13 @@ func MapCreateTeacherRequestToUser(req *CreateTeacherRequest) *domain.User {
 }
 
 type FinishClassRequest struct {
-	InstrumentID int      `json:"instrument_id" binding:"required"`
-	PackageID    *int     `json:"package_id,omitempty"`          // optional, only if class used a package
-	Date         string   `json:"date" binding:"required"`       // e.g. "2025-11-03"
-	StartTime    string   `json:"start_time" binding:"required"` // e.g. "14:00"
-	EndTime      string   `json:"end_time" binding:"required"`   // e.g. "15:00"
-	Notes        string   `json:"notes" binding:"required"`      // progress note from teacher (required)
-	DocumentURLs []string `json:"documentations,omitempty"`      // optional, list of uploaded file URLs
+	InstrumentID int       `json:"instrument_id" binding:"required"`
+	PackageID    *int      `json:"package_id,omitempty"`          // optional, only if class used a package
+	Date         string    `json:"date" binding:"required"`       // e.g. "2025-11-03"
+	StartTime    time.Time `json:"start_time" binding:"required"` // e.g. "14:00"
+	EndTime      time.Time `json:"end_time" binding:"required"`   // e.g. "15:00"
+	Notes        string    `json:"notes" binding:"required"`      // progress note from teacher (required)
+	DocumentURLs []string  `json:"documentations,omitempty"`      // optional, list of uploaded file URLs
 }
 
 // ✅ Converts DTO → domain.ClassHistory (for repository/usecase)
