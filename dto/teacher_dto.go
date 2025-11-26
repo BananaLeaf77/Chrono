@@ -6,9 +6,15 @@ import (
 	"time"
 )
 
-type AddAvailabilityRequest struct {
-	DayOfWeek string   `json:"day_of_week" binding:"required"`
-	Times     []string `json:"times" binding:"required,min=1"`
+type AddMultipleAvailabilityRequest struct {
+	TeacherUUID string        `json:"teacher_uuid" binding:"required,uuid"`
+	Slots       []TimeSlotDTO `json:"slots" binding:"required,min=1"`
+}
+
+type TimeSlotDTO struct {
+	DayOfWeek string `json:"day_of_week" binding:"required"`
+	StartTime string `json:"start_time" binding:"required"`
+	EndTime   string `json:"end_time" binding:"required"`
 }
 
 // Request untuk Create Teacher
