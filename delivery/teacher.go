@@ -79,24 +79,36 @@ func (h *TeacherHandler) FinishClass(c *gin.Context) {
 		return
 	}
 
-	// ✅ Map DTO → domain model
-	payload := dto.MapFinishClassRequestToClassHistory(&req, bookingID, teacherUUID)
+	// ✅ Map DTO → domain model (this now returns error)
+	payload, err := dto.MapFinishClassRequestToClassHistory(&req, bookingID, teacherUUID)
+	if err != nil {
+		utils.PrintLogInfo(&name, http.StatusBadRequest, "FinishClass - MapDTO", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to finish class",
+		})
+		return
+	}
 
 	// ✅ Call usecase
 	if err := h.tc.FinishClass(c.Request.Context(), bookingID, teacherUUID, payload); err != nil {
 		status := http.StatusInternalServerError
 
-		// Optional: make better HTTP status codes for expected errors
-		if strings.Contains(err.Error(), "tidak ditemukan") || strings.Contains(err.Error(), "tidak memiliki akses") {
+		// Determine appropriate status code
+		errorMsg := err.Error()
+		if strings.Contains(errorMsg, "tidak ditemukan") ||
+			strings.Contains(errorMsg, "tidak memiliki akses") {
 			status = http.StatusForbidden
-		} else if strings.Contains(err.Error(), "sudah") {
+		} else if strings.Contains(errorMsg, "sudah selesai") ||
+			strings.Contains(errorMsg, "belum selesai") {
 			status = http.StatusBadRequest
 		}
 
 		utils.PrintLogInfo(&name, status, "FinishClass - UseCase", &err)
 		c.JSON(status, gin.H{
 			"success": false,
-			"error":   err.Error(),
+			"error":   errorMsg,
 			"message": "Failed to finish class",
 		})
 		return
@@ -209,7 +221,7 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 
 	teacherID := teacherUUID.(string)
 
-	// Convert DTO to domain models
+	// Convert DTO to domain models with validation
 	schedules, err := h.convertToTeacherSchedules(teacherID, req.SlotsAvailability)
 	if err != nil {
 		utils.PrintLogInfo(&name, 400, "AddAvailability - ConvertDTO", &err)
@@ -228,6 +240,7 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 		statusCode := http.StatusInternalServerError
 		errorMsg := err.Error()
 
+		// Better error handling for specific cases
 		if strings.Contains(errorMsg, "invalid") ||
 			strings.Contains(errorMsg, "duplicate") ||
 			strings.Contains(errorMsg, "overlapping") ||
@@ -256,7 +269,7 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 	})
 }
 
-// Helper function to convert DTO to domain models
+// Helper function to convert DTO to domain models with strict validation
 func (h *TeacherHandler) convertToTeacherSchedules(teacherUUID string, slots []dto.SlotsAvailability) ([]domain.TeacherSchedule, error) {
 	var schedules []domain.TeacherSchedule
 	uniqueSlots := make(map[string]bool)
@@ -273,19 +286,19 @@ func (h *TeacherHandler) convertToTeacherSchedules(teacherUUID string, slots []d
 			return nil, fmt.Errorf("invalid end_time format '%s'", slotGroup.EndTime)
 		}
 
-		// Validate 1-hour duration
+		// ✅ STRICT: Validate exactly 1-hour duration
 		if endTime.Sub(startTime) != time.Hour {
 			return nil, fmt.Errorf("time slot must be exactly 1 hour, got %s - %s", slotGroup.StartTime, slotGroup.EndTime)
 		}
 
-		// Validate business hours (7:00 - 22:00)
+		// ✅ Validate business hours (7:00 - 22:00)
 		if startTime.Hour() < 7 || endTime.Hour() > 22 {
 			return nil, fmt.Errorf("time slot %s - %s must be between 07:00 and 22:00", slotGroup.StartTime, slotGroup.EndTime)
 		}
 
 		// Create schedules for each day in the group
 		for _, day := range slotGroup.DayOfTheWeek {
-			// Check for duplicate slots
+			// Check for duplicate slots in the request
 			slotKey := fmt.Sprintf("%s-%s-%s", day, slotGroup.StartTime, slotGroup.EndTime)
 			if uniqueSlots[slotKey] {
 				return nil, fmt.Errorf("duplicate time slot: %s %s-%s", day, slotGroup.StartTime, slotGroup.EndTime)

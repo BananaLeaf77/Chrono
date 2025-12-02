@@ -18,29 +18,33 @@ type teacherRepository struct {
 func NewTeacherRepository(db *gorm.DB) domain.TeacherRepository {
 	return &teacherRepository{db: db}
 }
-
 func (r *teacherRepository) AddAvailability(ctx context.Context, schedules *[]domain.TeacherSchedule) error {
+	// ✅ Check for overlaps BEFORE inserting
 	for _, schedule := range *schedules {
 		var count int64
 		err := r.db.WithContext(ctx).
 			Model(&domain.TeacherSchedule{}).
 			Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL", schedule.TeacherUUID, schedule.DayOfWeek).
 			Where(`
-			(start_time, end_time) OVERLAPS (?, ?)
-		`, schedule.StartTime, schedule.EndTime).
+				(start_time, end_time) OVERLAPS (?, ?)
+			`, schedule.StartTime, schedule.EndTime).
 			Count(&count).Error
 		if err != nil {
 			return fmt.Errorf("failed to check overlap: %w", err)
 		}
 		if count > 0 {
-			return errors.New("slot waktu konflik mohon check kembali waktu anda")
+			return fmt.Errorf("slot waktu %s %s-%s konflik dengan jadwal yang sudah ada",
+				schedule.DayOfWeek,
+				schedule.StartTime.Format("15:04"),
+				schedule.EndTime.Format("15:04"))
 		}
 	}
 
-	// If no conflicts, proceed
+	// ✅ If no conflicts, insert all schedules
 	if err := r.db.WithContext(ctx).Create(schedules).Error; err != nil {
 		return fmt.Errorf("failed to add schedule: %w", err)
 	}
+
 	return nil
 }
 
@@ -52,41 +56,74 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		}
 	}()
 
-	// 1️⃣ Get booking by ID
+	// 1️⃣ Get booking
 	var booking domain.Booking
 	err := tx.Preload("Schedule").
-		Where("id = ? AND status = ?", bookingID, "booked").
+		Where("id = ? AND status = ?", bookingID, domain.StatusBooked).
 		First(&booking).Error
 	if err != nil {
 		tx.Rollback()
-		return errors.New("booking tidak ditemukan atau sudah selesai")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("booking tidak ditemukan atau sudah selesai")
+		}
+		return fmt.Errorf("gagal mengambil booking: %w", err)
 	}
 
-	// 2️⃣ Check if the booking belongs to this teacher
+	// 2️⃣ Verify teacher ownership
 	if booking.Schedule.TeacherUUID != teacherUUID {
 		tx.Rollback()
 		return errors.New("anda tidak memiliki akses ke booking ini")
 	}
 
-	// 3️⃣ Ensure class time has passed
-	now := time.Now()
-	if now.Before(booking.Schedule.EndTime) {
+	// 3️⃣ Verify class time has passed
+	classEndTime := time.Date(
+		booking.ClassDate.Year(),
+		booking.ClassDate.Month(),
+		booking.ClassDate.Day(),
+		booking.Schedule.EndTime.Hour(),
+		booking.Schedule.EndTime.Minute(),
+		0, 0, time.Local,
+	)
+
+	if time.Now().Before(classEndTime) {
 		tx.Rollback()
 		return errors.New("kelas belum selesai, tunggu hingga waktu berakhir")
 	}
 
-	// 4️⃣ Create ClassHistory record
+	// ✅ 4️⃣ Validate submitted date matches booking date
+	if !payload.Date.Equal(booking.ClassDate.Truncate(24 * time.Hour)) {
+		tx.Rollback()
+		return fmt.Errorf("tanggal yang dimasukkan (%s) tidak sesuai dengan tanggal booking (%s)",
+			payload.Date.Format("2006-01-02"),
+			booking.ClassDate.Format("2006-01-02"))
+	}
+
+	// ✅ 5️⃣ Validate submitted times match schedule times
+	if payload.StartTime.Hour() != booking.Schedule.StartTime.Hour() ||
+		payload.StartTime.Minute() != booking.Schedule.StartTime.Minute() {
+		tx.Rollback()
+		return fmt.Errorf("waktu mulai tidak sesuai dengan jadwal (harusnya %s)",
+			booking.Schedule.StartTime.Format("15:04"))
+	}
+
+	if payload.EndTime.Hour() != booking.Schedule.EndTime.Hour() ||
+		payload.EndTime.Minute() != booking.Schedule.EndTime.Minute() {
+		tx.Rollback()
+		return fmt.Errorf("waktu selesai tidak sesuai dengan jadwal (harusnya %s)",
+			booking.Schedule.EndTime.Format("15:04"))
+	}
+
+	// 6️⃣ Create ClassHistory
 	classHistory := domain.ClassHistory{
-		BookingID:    booking.ID,
-		TeacherUUID:  booking.Schedule.TeacherUUID,
-		StudentUUID:  booking.StudentUUID,
-		InstrumentID: payload.InstrumentID, // you can also use booking.Schedule.InstrumentID if available
-		PackageID:    payload.PackageID,
-		Status:       domain.StatusCompleted,
-		Date:         now,
-		StartTime:    booking.Schedule.StartTime,
-		EndTime:      booking.Schedule.EndTime,
-		Notes:        payload.Notes,
+		BookingID:   booking.ID,
+		TeacherUUID: booking.Schedule.TeacherUUID,
+		StudentUUID: booking.StudentUUID,
+		PackageID:   payload.PackageID,
+		Status:      domain.StatusCompleted,
+		Date:        booking.ClassDate,
+		StartTime:   booking.Schedule.StartTime,
+		EndTime:     booking.Schedule.EndTime,
+		Notes:       payload.Notes,
 	}
 
 	if err := tx.Create(&classHistory).Error; err != nil {
@@ -94,39 +131,36 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		return fmt.Errorf("gagal membuat riwayat kelas: %w", err)
 	}
 
-	// 5️⃣ Save class documentations (if any)
+	// 7️⃣ Save documentations
 	for _, doc := range payload.Documentations {
 		doc.ClassHistoryID = classHistory.ID
 		if err := tx.Create(&doc).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("gagal menyimpan dokumentasi kelas: %w", err)
+			return fmt.Errorf("gagal menyimpan dokumentasi: %w", err)
 		}
 	}
 
-	// 6️⃣ Update booking status
+	// 8️⃣ Update booking status
 	completedAt := time.Now()
 	if err := tx.Model(&domain.Booking{}).
 		Where("id = ?", booking.ID).
 		Updates(map[string]interface{}{
-			"status":       "completed",
+			"status":       domain.StatusCompleted,
 			"completed_at": completedAt,
 		}).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("gagal memperbarui status booking: %w", err)
 	}
 
-	// 7️⃣ Decrement student's package quota (if applicable)
-	if payload.PackageID != nil {
-		if err := tx.Model(&domain.StudentPackage{}).
-			Where("student_uuid = ? AND package_id = ?", booking.StudentUUID, *payload.PackageID).
-			UpdateColumn("remaining_quota", gorm.Expr("remaining_quota - ?", 1)).
-			Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("gagal mengurangi kuota paket: %w", err)
-		}
+	// 9️⃣ Mark schedule as available again
+	if err := tx.Model(&domain.TeacherSchedule{}).
+		Where("id = ?", booking.ScheduleID).
+		Update("is_booked", false).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal memperbarui jadwal: %w", err)
 	}
 
-	// 8️⃣ Commit transaction
+	// ✅ Commit
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("gagal menyimpan transaksi: %w", err)
 	}

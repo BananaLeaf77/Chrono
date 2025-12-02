@@ -5,10 +5,13 @@ import (
 	"chronosphere/delivery"
 	"chronosphere/repository"
 	"chronosphere/service"
+	"chronosphere/utils"
 	"log"
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
 )
 
@@ -16,6 +19,11 @@ func main() {
 	// Load .env
 	if err := godotenv.Load(); err != nil {
 		log.Println("⚠️  .env file not found, using system environment variables")
+	}
+
+	// ✅ Register custom validators
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		utils.RegisterCustomValidations(v)
 	}
 
 	// Boot DB

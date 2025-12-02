@@ -75,29 +75,6 @@ type Instrument struct {
 	DeletedAt *time.Time `gorm:"index" json:"deleted_at,omitempty"`
 }
 
-type Booking struct {
-	ID            int        `gorm:"primaryKey" json:"id"`
-	StudentUUID   string     `gorm:"type:uuid;not null" json:"student_uuid"`
-	ScheduleID    int        `gorm:"not null" json:"schedule_id"`
-	Status        string     `gorm:"size:20;default:'booked'" json:"status"`
-	BookedAt      time.Time  `gorm:"autoCreateTime" json:"booked_at"`
-	CompletedAt   *time.Time `json:"completed_at,omitempty"`
-	RescheduledAt *time.Time `json:"rescheduled_at,omitempty"`
-	CancelledAt   *time.Time `json:"cancelled_at,omitempty"`
-
-	// 🔹 Siapa yang membatalkan (Teacher, Student, atau Admin)
-	CanceledBy *string `gorm:"type:uuid" json:"canceled_by,omitempty"`
-	CancelUser *User   `gorm:"foreignKey:CanceledBy;references:UUID" json:"cancel_user,omitempty"`
-
-	Notes *string `json:"notes,omitempty"`
-
-	// Relasi ke jadwal dan student
-	Schedule TeacherSchedule `gorm:"foreignKey:ScheduleID" json:"schedule"`
-	Student  User            `gorm:"foreignKey:StudentUUID;references:UUID" json:"student"`
-
-	IsReadyToFinish bool `gorm:"-" json:"is_ready_to_finish"`
-}
-
 type TeacherSchedule struct {
 	ID          int        `gorm:"primaryKey" json:"id"`
 	TeacherUUID string     `gorm:"type:uuid;not null" json:"teacher_uuid"`
@@ -111,20 +88,42 @@ type TeacherSchedule struct {
 
 	Teacher        User            `gorm:"foreignKey:TeacherUUID;references:UUID" json:"teacher"`
 	TeacherProfile *TeacherProfile `gorm:"foreignKey:UserUUID;references:TeacherUUID" json:"teacher_profile,omitempty"`
+
+	// ✅ Add computed field for next class date
+	NextClassDate *time.Time `gorm:"-" json:"next_class_date,omitempty"`
+}
+
+type Booking struct {
+	ID            int        `gorm:"primaryKey" json:"id"`
+	StudentUUID   string     `gorm:"type:uuid;not null" json:"student_uuid"`
+	ScheduleID    int        `gorm:"not null" json:"schedule_id"`
+	ClassDate     time.Time  `gorm:"not null" json:"class_date"` // ✅ Add this field
+	Status        string     `gorm:"size:20;default:'booked'" json:"status"`
+	BookedAt      time.Time  `gorm:"autoCreateTime" json:"booked_at"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
+	RescheduledAt *time.Time `json:"rescheduled_at,omitempty"`
+	CancelledAt   *time.Time `json:"cancelled_at,omitempty"`
+	CanceledBy    *string    `gorm:"type:uuid" json:"canceled_by,omitempty"`
+	CancelUser    *User      `gorm:"foreignKey:CanceledBy;references:UUID" json:"cancel_user,omitempty"`
+	Notes         *string    `json:"notes,omitempty"`
+
+	Schedule TeacherSchedule `gorm:"foreignKey:ScheduleID" json:"schedule"`
+	Student  User            `gorm:"foreignKey:StudentUUID;references:UUID" json:"student"`
+
+	IsReadyToFinish bool `gorm:"-" json:"is_ready_to_finish"`
 }
 
 type ClassHistory struct {
-	ID           int       `gorm:"primaryKey" json:"id"`
-	BookingID    int       `gorm:"not null;unique" json:"booking_id"`
-	TeacherUUID  string    `gorm:"type:uuid;not null" json:"teacher_uuid"`
-	StudentUUID  string    `gorm:"type:uuid;not null" json:"student_uuid"`
-	InstrumentID int       `gorm:"not null" json:"instrument_id"`
-	PackageID    *int      `json:"package_id,omitempty"`
-	Status       string    `gorm:"size:20;default:'completed'" json:"status"`
-	Date         time.Time `gorm:"not null" json:"date"`
-	StartTime    time.Time `gorm:"not null" json:"start_time"`
-	EndTime      time.Time `gorm:"not null" json:"end_time"`
-	Notes        *string   `json:"notes,omitempty"`
+	ID          int       `gorm:"primaryKey" json:"id"`
+	BookingID   int       `gorm:"not null;unique" json:"booking_id"`
+	TeacherUUID string    `gorm:"type:uuid;not null" json:"teacher_uuid"`
+	StudentUUID string    `gorm:"type:uuid;not null" json:"student_uuid"`
+	PackageID   *int      `json:"package_id,omitempty"`
+	Status      string    `gorm:"size:20;default:'completed'" json:"status"`
+	Date        time.Time `gorm:"not null" json:"date"`
+	StartTime   time.Time `gorm:"not null" json:"start_time"`
+	EndTime     time.Time `gorm:"not null" json:"end_time"`
+	Notes       *string   `json:"notes,omitempty"`
 
 	Instrument     Instrument           `gorm:"foreignKey:InstrumentID" json:"instrument"`
 	Package        *Package             `gorm:"foreignKey:PackageID" json:"package,omitempty"`

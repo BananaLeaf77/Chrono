@@ -7,24 +7,19 @@ import (
 )
 
 func CalculateEndTime(startTime string, durationHours float64) string {
-	const timeLayout = "15:04" // 24-hour format
-
-	// Parse the input start time
+	const timeLayout = "15:04"
 	t, err := time.Parse(timeLayout, startTime)
 	if err != nil {
-		// Return fallback (start time) if invalid format
 		fmt.Printf("⚠️ Invalid time format: %v\n", err)
 		return startTime
 	}
 
-	// Add hours (durationHours can be fractional, e.g., 1.5 for 1 hour 30 min)
 	duration := time.Duration(durationHours * float64(time.Hour))
 	endTime := t.Add(duration)
-
-	// Return as "HH:mm"
 	return endTime.Format(timeLayout)
 }
 
+// GetNextClassDate calculates the next occurrence of a specific day and time
 func GetNextClassDate(dayOfWeek string, startTime time.Time) time.Time {
 	dayMap := map[string]time.Weekday{
 		"minggu": time.Sunday,
@@ -38,18 +33,52 @@ func GetNextClassDate(dayOfWeek string, startTime time.Time) time.Time {
 
 	targetDay, ok := dayMap[strings.ToLower(dayOfWeek)]
 	if !ok {
-		return time.Now() // fallback if input invalid
+		// Fallback to next week same day if invalid
+		return time.Now().AddDate(0, 0, 7)
 	}
 
 	now := time.Now()
-	diff := (int(targetDay) - int(now.Weekday()) + 7) % 7
-	nextClassDate := now.AddDate(0, 0, diff)
+	currentDay := now.Weekday()
 
+	// Calculate days until target
+	daysUntil := int(targetDay - currentDay)
+	if daysUntil < 0 {
+		daysUntil += 7
+	}
+
+	// If it's today, check if the time has passed
+	if daysUntil == 0 {
+		todayClassTime := time.Date(
+			now.Year(), now.Month(), now.Day(),
+			startTime.Hour(), startTime.Minute(), 0, 0, time.Local,
+		)
+		// If class time has passed today, schedule for next week
+		if now.After(todayClassTime) {
+			daysUntil = 7
+		}
+	}
+
+	nextDate := now.AddDate(0, 0, daysUntil)
 	return time.Date(
-		nextClassDate.Year(),
-		nextClassDate.Month(),
-		nextClassDate.Day(),
+		nextDate.Year(),
+		nextDate.Month(),
+		nextDate.Day(),
 		startTime.Hour(),
 		startTime.Minute(),
-		0, 0, time.Local)
+		0, 0, time.Local,
+	)
+}
+
+// GetDayName returns Indonesian day name from time.Weekday
+func GetDayName(weekday time.Weekday) string {
+	dayNames := map[time.Weekday]string{
+		time.Sunday:    "Minggu",
+		time.Monday:    "Senin",
+		time.Tuesday:   "Selasa",
+		time.Wednesday: "Rabu",
+		time.Thursday:  "Kamis",
+		time.Friday:    "Jumat",
+		time.Saturday:  "Sabtu",
+	}
+	return dayNames[weekday]
 }

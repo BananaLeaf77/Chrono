@@ -2,19 +2,19 @@ package dto
 
 import (
 	"chronosphere/domain"
+	"fmt"
 	"strings"
 	"time"
 )
 
 type AddMultipleAvailabilityRequest struct {
-	TeacherUUID       string              `json:"teacher_uuid" binding:"required,uuid"`
 	SlotsAvailability []SlotsAvailability `json:"slots_availability" binding:"required,min=1,dive"`
 }
 
 type SlotsAvailability struct {
 	DayOfTheWeek []string `json:"day_of_the_week" binding:"required,min=1,dive,oneof=senin selasa rabu kamis jumat sabtu minggu"`
-	StartTime    string   `json:"start_time" binding:"required,datetime=15:04"`
-	EndTime      string   `json:"end_time" binding:"required,datetime=15:04,gtfield=StartTime"`
+	StartTime    string   `json:"start_time" binding:"required,timeformat"`
+	EndTime      string   `json:"end_time" binding:"required,timeformat"`
 }
 
 // Request untuk Create Teacher
@@ -75,29 +75,49 @@ func MapCreateTeacherRequestToUser(req *CreateTeacherRequest) *domain.User {
 }
 
 type FinishClassRequest struct {
-	InstrumentID int       `json:"instrument_id" binding:"required"`
-	PackageID    *int      `json:"package_id,omitempty"`          // optional, only if class used a package
-	Date         string    `json:"date" binding:"required"`       // e.g. "2025-11-03"
-	StartTime    time.Time `json:"start_time" binding:"required"` // e.g. "14:00"
-	EndTime      time.Time `json:"end_time" binding:"required"`   // e.g. "15:00"
-	Notes        string    `json:"notes" binding:"required"`      // progress note from teacher (required)
-	DocumentURLs []string  `json:"documentations,omitempty"`      // optional, list of uploaded file URLs
+	InstrumentID int      `json:"instrument_id" binding:"required"`
+	PackageID    *int     `json:"package_id,omitempty"`          // optional, only if class used a package
+	Date         string   `json:"date" binding:"required"`       // e.g. "2025-11-03"
+	StartTime    string   `json:"start_time" binding:"required"` // ✅ Changed to string
+	EndTime      string   `json:"end_time" binding:"required"`   // ✅ Changed to string
+	Notes        string   `json:"notes" binding:"required"`      // progress note from teacher (required)
+	DocumentURLs []string `json:"documentations,omitempty"`      // optional, list of uploaded file URLs
 }
 
-// ✅ Converts DTO → domain.ClassHistory (for repository/usecase)
-func MapFinishClassRequestToClassHistory(req *FinishClassRequest, bookingID int, teacherUUID string) domain.ClassHistory {
-	parsedDate, _ := time.Parse("2006-01-02", req.Date)
+// ✅ Update mapper to handle string time conversion
+func MapFinishClassRequestToClassHistory(req *FinishClassRequest, bookingID int, teacherUUID string) (domain.ClassHistory, error) {
+	// Parse date
+	parsedDate, err := time.Parse("2006-01-02", req.Date)
+	if err != nil {
+		return domain.ClassHistory{}, fmt.Errorf("invalid date format, use YYYY-MM-DD: %w", err)
+	}
+
+	// Parse start time
+	startTime, err := time.Parse("15:04", req.StartTime)
+	if err != nil {
+		return domain.ClassHistory{}, fmt.Errorf("invalid start_time format, use HH:MM: %w", err)
+	}
+
+	// Parse end time
+	endTime, err := time.Parse("15:04", req.EndTime)
+	if err != nil {
+		return domain.ClassHistory{}, fmt.Errorf("invalid end_time format, use HH:MM: %w", err)
+	}
+
+	// ✅ Validate that it's exactly 1 hour
+	if endTime.Sub(startTime) != time.Hour {
+		return domain.ClassHistory{}, fmt.Errorf("class duration must be exactly 1 hour")
+	}
 
 	history := domain.ClassHistory{
-		BookingID:    bookingID,
-		TeacherUUID:  teacherUUID,
-		InstrumentID: req.InstrumentID,
-		PackageID:    req.PackageID,
-		Date:         parsedDate,
-		StartTime:    req.StartTime,
-		EndTime:      req.EndTime,
-		Notes:        &req.Notes,
-		Status:       domain.StatusCompleted,
+		BookingID:   bookingID,
+		TeacherUUID: teacherUUID,
+		PackageID:   req.PackageID,
+		Date:        parsedDate,
+		StartTime:   startTime,
+		EndTime:     endTime,
+		Notes:       &req.Notes,
+		Status:      domain.StatusCompleted,
 	}
 
 	// Add documentation URLs if provided
@@ -109,9 +129,8 @@ func MapFinishClassRequestToClassHistory(req *FinishClassRequest, bookingID int,
 		}
 	}
 
-	return history
+	return history, nil
 }
-
 func MapUpdateTeacherRequestToUser(req *UpdateTeacherProfileRequest) *domain.User {
 	return &domain.User{
 		Name:  req.Name,
