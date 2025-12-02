@@ -19,6 +19,31 @@ func NewTeacherRepository(db *gorm.DB) domain.TeacherRepository {
 	return &teacherRepository{db: db}
 }
 
+func (r *teacherRepository) AddAvailability(ctx context.Context, schedules *[]domain.TeacherSchedule) error {
+	for _, schedule := range *schedules {
+		var count int64
+		err := r.db.WithContext(ctx).
+			Model(&domain.TeacherSchedule{}).
+			Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL", schedule.TeacherUUID, schedule.DayOfWeek).
+			Where(`
+			(start_time, end_time) OVERLAPS (?, ?)
+		`, schedule.StartTime, schedule.EndTime).
+			Count(&count).Error
+		if err != nil {
+			return fmt.Errorf("failed to check overlap: %w", err)
+		}
+		if count > 0 {
+			return errors.New("slot waktu konflik mohon check kembali waktu anda")
+		}
+	}
+
+	// If no conflicts, proceed
+	if err := r.db.WithContext(ctx).Create(schedules).Error; err != nil {
+		return fmt.Errorf("failed to add schedule: %w", err)
+	}
+	return nil
+}
+
 func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teacherUUID string, payload domain.ClassHistory) error {
 	tx := r.db.WithContext(ctx).Begin()
 	defer func() {
@@ -109,29 +134,29 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 	return nil
 }
 
-func (r *teacherRepository) AddAvailability(ctx context.Context, schedule *domain.TeacherSchedule) error {
-	var count int64
-	err := r.db.WithContext(ctx).
-		Model(&domain.TeacherSchedule{}).
-		Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL", schedule.TeacherUUID, schedule.DayOfWeek).
-		Where(`
-			(start_time, end_time) OVERLAPS (?, ?)
-		`, schedule.StartTime, schedule.EndTime).
-		Count(&count).Error
-	if err != nil {
-		return fmt.Errorf("failed to check overlap: %w", err)
-	}
-	if count > 0 {
-		return errors.New("slot waktu konflik mohon check kembali waktu anda")
-	}
+// func (r *teacherRepository) AddAvailability(ctx context.Context, schedule *domain.TeacherSchedule) error {
+// 	var count int64
+// 	err := r.db.WithContext(ctx).
+// 		Model(&domain.TeacherSchedule{}).
+// 		Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL", schedule.TeacherUUID, schedule.DayOfWeek).
+// 		Where(`
+// 			(start_time, end_time) OVERLAPS (?, ?)
+// 		`, schedule.StartTime, schedule.EndTime).
+// 		Count(&count).Error
+// 	if err != nil {
+// 		return fmt.Errorf("failed to check overlap: %w", err)
+// 	}
+// 	if count > 0 {
+// 		return errors.New("slot waktu konflik mohon check kembali waktu anda")
+// 	}
 
-	// If no conflicts, proceed
-	if err := r.db.WithContext(ctx).Create(schedule).Error; err != nil {
-		return fmt.Errorf("failed to add schedule: %w", err)
-	}
+// 	// If no conflicts, proceed
+// 	if err := r.db.WithContext(ctx).Create(schedule).Error; err != nil {
+// 		return fmt.Errorf("failed to add schedule: %w", err)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (r *teacherRepository) GetMyProfile(ctx context.Context, userUUID string) (*domain.User, error) {
 	var teacher domain.User

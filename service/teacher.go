@@ -38,8 +38,8 @@ func (uc *teacherService) GetMySchedules(ctx context.Context, teacherUUID string
 	return uc.repo.GetMySchedules(ctx, teacherUUID)
 }
 
-func (uc *teacherService) AddAvailability(ctx context.Context, teacherUUID string, schedule *domain.TeacherSchedule) error {
-	return uc.repo.AddAvailability(ctx, schedule)
+func (s *teacherService) AddAvailability(ctx context.Context, req *[]domain.TeacherSchedule) error {
+	return s.repo.AddAvailability(ctx, req)
 }
 
 // ✅ Delete availability (only if not booked)

@@ -7,14 +7,14 @@ import (
 )
 
 type AddMultipleAvailabilityRequest struct {
-	TeacherUUID string        `json:"teacher_uuid" binding:"required,uuid"`
-	Slots       []TimeSlotDTO `json:"slots" binding:"required,min=1"`
+	TeacherUUID       string              `json:"teacher_uuid" binding:"required,uuid"`
+	SlotsAvailability []SlotsAvailability `json:"slots_availability" binding:"required,min=1,dive"`
 }
 
-type TimeSlotDTO struct {
-	DayOfWeek string `json:"day_of_week" binding:"required"`
-	StartTime string `json:"start_time" binding:"required"`
-	EndTime   string `json:"end_time" binding:"required"`
+type SlotsAvailability struct {
+	DayOfTheWeek []string `json:"day_of_the_week" binding:"required,min=1,dive,oneof=senin selasa rabu kamis jumat sabtu minggu"`
+	StartTime    string   `json:"start_time" binding:"required,datetime=15:04"`
+	EndTime      string   `json:"end_time" binding:"required,datetime=15:04,gtfield=StartTime"`
 }
 
 // Request untuk Create Teacher

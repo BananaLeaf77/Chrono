@@ -184,7 +184,7 @@ func (h *TeacherHandler) GetAllBookedClass(c *gin.Context) {
 func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 	name := utils.GetAPIHitter(c)
 
-	var req dto.AddAvailabilityRequest
+	var req dto.AddMultipleAvailabilityRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.PrintLogInfo(&name, 400, "AddAvailability - BindJSON", &err)
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -195,23 +195,7 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 		return
 	}
 
-	// ✅ Validate day of week (Indonesian names, lowercased)
-	validDays := map[string]bool{
-		"senin": true, "selasa": true, "rabu": true,
-		"kamis": true, "jumat": true, "sabtu": true, "minggu": true,
-	}
-
-	day := strings.ToLower(strings.TrimSpace(req.DayOfWeek))
-	if !validDays[day] {
-		utils.PrintLogInfo(&name, 400, "AddAvailability - InvalidDay", nil)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Failed to add availability",
-			"error":   fmt.Sprintf("Hari tidak sesuai: '%s'. Gunakan nama hari yang valid (Senin–Minggu).", req.DayOfWeek),
-		})
-		return
-	}
-
+	// Extract teacher UUID from JWT token
 	teacherUUID, exists := c.Get("userUUID")
 	if !exists {
 		utils.PrintLogInfo(&name, 401, "AddAvailability - MissingUserUUID", nil)
@@ -224,45 +208,109 @@ func (h *TeacherHandler) AddAvailability(c *gin.Context) {
 	}
 
 	teacherID := teacherUUID.(string)
+
+	// Convert DTO to domain models
+	schedules, err := h.convertToTeacherSchedules(teacherID, req.SlotsAvailability)
+	if err != nil {
+		utils.PrintLogInfo(&name, 400, "AddAvailability - ConvertDTO", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Failed to add availability",
+			"error":   err.Error(),
+		})
+		return
+	}
+
 	ctx := c.Request.Context()
 
-	for _, startTimeStr := range req.Times {
-		startTime, err := time.Parse("15:04", startTimeStr)
+	// Call the use case with the converted domain models
+	if err := h.tc.AddAvailability(ctx, &schedules); err != nil {
+		statusCode := http.StatusInternalServerError
+		errorMsg := err.Error()
+
+		if strings.Contains(errorMsg, "invalid") ||
+			strings.Contains(errorMsg, "duplicate") ||
+			strings.Contains(errorMsg, "overlapping") ||
+			strings.Contains(errorMsg, "must be exactly 1 hour") ||
+			strings.Contains(errorMsg, "between 07:00 and 22:00") {
+			statusCode = http.StatusBadRequest
+		}
+
+		utils.PrintLogInfo(&name, statusCode, "AddAvailability - UseCaseError", &err)
+		c.JSON(statusCode, gin.H{
+			"success": false,
+			"message": "Failed to add availability",
+			"error":   errorMsg,
+		})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 201, "AddAvailability - Success", nil)
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": fmt.Sprintf("Berhasil menambahkan %d slot jadwal tersedia.", len(schedules)),
+		"data": gin.H{
+			"total_slots_added": len(schedules),
+			"teacher_uuid":      teacherID,
+		},
+	})
+}
+
+// Helper function to convert DTO to domain models
+func (h *TeacherHandler) convertToTeacherSchedules(teacherUUID string, slots []dto.SlotsAvailability) ([]domain.TeacherSchedule, error) {
+	var schedules []domain.TeacherSchedule
+	uniqueSlots := make(map[string]bool)
+
+	for _, slotGroup := range slots {
+		// Parse times once per slot group
+		startTime, err := time.Parse("15:04", slotGroup.StartTime)
 		if err != nil {
-			utils.PrintLogInfo(&name, 400, "AddAvailability - InvalidTimeFormat", &err)
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Failed to add availability",
-				"error":   fmt.Sprintf("Format jam tidak valid: %s (gunakan HH:mm, contoh 14:00)", startTimeStr),
-			})
-			return
+			return nil, fmt.Errorf("invalid start_time format '%s'", slotGroup.StartTime)
 		}
 
-		endTime := startTime.Add(time.Hour)
-
-		schedule := &domain.TeacherSchedule{
-			TeacherUUID: teacherID,
-			DayOfWeek:   cases.Title(language.Indonesian).String(day),
-			StartTime:   startTime,
-			EndTime:     endTime,
+		endTime, err := time.Parse("15:04", slotGroup.EndTime)
+		if err != nil {
+			return nil, fmt.Errorf("invalid end_time format '%s'", slotGroup.EndTime)
 		}
 
-		if err := h.tc.AddAvailability(ctx, teacherID, schedule); err != nil {
-			utils.PrintLogInfo(&name, 500, "AddAvailability - UseCaseError", &err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to add availability",
-				"error":   err.Error(),
-			})
-			return
+		// Validate 1-hour duration
+		if endTime.Sub(startTime) != time.Hour {
+			return nil, fmt.Errorf("time slot must be exactly 1 hour, got %s - %s", slotGroup.StartTime, slotGroup.EndTime)
+		}
+
+		// Validate business hours (7:00 - 22:00)
+		if startTime.Hour() < 7 || endTime.Hour() > 22 {
+			return nil, fmt.Errorf("time slot %s - %s must be between 07:00 and 22:00", slotGroup.StartTime, slotGroup.EndTime)
+		}
+
+		// Create schedules for each day in the group
+		for _, day := range slotGroup.DayOfTheWeek {
+			// Check for duplicate slots
+			slotKey := fmt.Sprintf("%s-%s-%s", day, slotGroup.StartTime, slotGroup.EndTime)
+			if uniqueSlots[slotKey] {
+				return nil, fmt.Errorf("duplicate time slot: %s %s-%s", day, slotGroup.StartTime, slotGroup.EndTime)
+			}
+			uniqueSlots[slotKey] = true
+
+			// Convert day to title case (e.g., "senin" -> "Senin")
+			dayTitleCase := cases.Title(language.Indonesian).String(day)
+
+			// Create domain schedule
+			schedule := domain.TeacherSchedule{
+				TeacherUUID: teacherUUID,
+				DayOfWeek:   dayTitleCase,
+				StartTime:   startTime,
+				EndTime:     endTime,
+				IsBooked:    false,
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+			}
+
+			schedules = append(schedules, schedule)
 		}
 	}
 
-	utils.PrintLogInfo(&name, 200, "AddAvailability - Success", nil)
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Jadwal tersedia berhasil ditambahkan.",
-	})
+	return schedules, nil
 }
 
 func (th *TeacherHandler) GetMySchedules(c *gin.Context) {
