@@ -29,9 +29,42 @@ func NewStudentHandler(r *gin.Engine, studUC domain.StudentUseCase, jwtManager *
 		student.GET("/classes", handler.GetAvailableSchedules)
 		student.PUT("/modify", handler.UpdateStudentData)
 		student.DELETE("/cancel/:booking_id", handler.CancelBookedClass)
+		student.GET("/class-history", handler.GetMyClassHistory)
 
 	}
 
+}
+
+func (h *StudentHandler) GetMyClassHistory(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		utils.PrintLogInfo(&name, 401, "GetMyClassHistory", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to Get My Class History",
+		})
+		return
+	}
+
+	histories, err := h.studUC.GetMyClassHistory(c.Request.Context(), userUUID.(string))
+	if err != nil {
+		utils.PrintLogInfo(&name, 500, "GetMyClassHistory", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to Get My Class History",
+		})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "GetMyClassHistory", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    histories,
+	})
 }
 
 func (h *StudentHandler) CancelBookedClass(c *gin.Context) {

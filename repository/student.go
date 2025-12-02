@@ -19,7 +19,34 @@ func NewStudentRepository(db *gorm.DB) domain.StudentRepository {
 	return &studentRepository{db: db}
 }
 
-func (r *studentRepository) CancelBookedClass(ctx context.Context, bookingID int, studentUUID string, reason *string) error {
+func (r *studentRepository) GetMyClassHistory(ctx context.Context, studentUUID string) (*[]domain.ClassHistory, error) {
+	var histories []domain.ClassHistory
+
+	err := r.db.WithContext(ctx).
+		Where("student_uuid = ?", studentUUID).
+		Preload("Booking").
+		Preload("Booking.Schedule").
+		Preload("Booking.Schedule.Teacher").
+		Preload("Booking.Schedule.TeacherProfile.Instruments").
+		Preload("Teacher").
+		Preload("Documentations").
+		Order("date DESC, start_time DESC").
+		Find(&histories).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch class history: %w", err)
+	}
+
+	return &histories, nil
+}
+
+func (r *studentRepository) CancelBookedClass(
+	ctx context.Context,
+	bookingID int,
+	studentUUID string,
+	reason *string,
+) error {
+
 	tx := r.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -29,7 +56,7 @@ func (r *studentRepository) CancelBookedClass(ctx context.Context, bookingID int
 
 	var booking domain.Booking
 
-	// 🔍 Load booking + schedule
+	// Load booking + schedule
 	if err := tx.Preload("Schedule").
 		Where("id = ? AND status = ?", bookingID, domain.StatusBooked).
 		First(&booking).Error; err != nil {
@@ -37,27 +64,21 @@ func (r *studentRepository) CancelBookedClass(ctx context.Context, bookingID int
 		return errors.New("booking tidak ditemukan atau sudah dibatalkan")
 	}
 
-	// ✅ Ownership check
+	// Ownership check
 	if booking.StudentUUID != studentUUID {
 		tx.Rollback()
 		return errors.New("anda tidak memiliki akses ke booking ini")
 	}
 
-	// 🔎 Get class history to check actual date
-	var classHistory domain.ClassHistory
-	if err := tx.Where("booking_id = ?", booking.ID).First(&classHistory).Error; err != nil {
-		tx.Rollback()
-		return errors.New("data kelas tidak ditemukan untuk booking ini")
+	// Default reason
+	if reason == nil || *reason == "" {
+		defaultReason := "Alasan tidak diberikan"
+		reason = &defaultReason
 	}
 
-	// 🕐 Check if within allowed time (H-1)
-	if time.Until(classHistory.Date) < 24*time.Hour {
-		tx.Rollback()
-		return errors.New("pembatalan hanya dapat dilakukan maksimal H-1 sebelum kelas dimulai")
-	}
-
-	// 🔁 Update booking status
 	cancelTime := time.Now()
+
+	// 🔁 Update booking
 	if err := tx.Model(&domain.Booking{}).
 		Where("id = ?", booking.ID).
 		Updates(map[string]interface{}{
@@ -70,26 +91,22 @@ func (r *studentRepository) CancelBookedClass(ctx context.Context, bookingID int
 		return fmt.Errorf("gagal membatalkan booking: %w", err)
 	}
 
-	// 🔁 Update class history status
-	if err := tx.Model(&domain.ClassHistory{}).
-		Where("booking_id = ?", booking.ID).
-		Update("status", domain.StatusCancelled).Error; err != nil {
+	// 🔁 Refund quota (1 quota)
+	if err := tx.Exec(`
+        UPDATE student_packages 
+        SET remaining_quota = remaining_quota + 1
+        WHERE student_uuid = ? 
+        AND package_id = (
+            SELECT package_id FROM student_packages 
+            WHERE student_uuid = ? 
+            ORDER BY id DESC LIMIT 1
+        )
+    `, booking.StudentUUID, booking.StudentUUID).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal memperbarui status riwayat kelas: %w", err)
+		return fmt.Errorf("gagal refund quota: %w", err)
 	}
 
-	// ♻️ Refund quota (if class used a package)
-	if classHistory.PackageID != nil {
-		if err := tx.Model(&domain.StudentPackage{}).
-			Where("student_uuid = ? AND package_id = ?", booking.StudentUUID, *classHistory.PackageID).
-			UpdateColumn("remaining_quota", gorm.Expr("remaining_quota + ?", 1)).
-			Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("gagal mengembalikan kuota paket: %w", err)
-		}
-	}
-
-	// 🔓 Mark schedule as available again
+	// 🔁 Update schedule availability
 	if err := tx.Model(&domain.TeacherSchedule{}).
 		Where("id = ?", booking.ScheduleID).
 		Update("is_booked", false).Error; err != nil {
@@ -97,7 +114,46 @@ func (r *studentRepository) CancelBookedClass(ctx context.Context, bookingID int
 		return fmt.Errorf("gagal memperbarui jadwal pengajar: %w", err)
 	}
 
-	// ✅ Commit
+	// 🔁 Update or Insert into ClassHistory
+	var history domain.ClassHistory
+	err := tx.Where("booking_id = ?", booking.ID).First(&history).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+
+		// Insert new cancel history
+		newHistory := domain.ClassHistory{
+			BookingID:   booking.ID,
+			TeacherUUID: booking.Schedule.TeacherUUID,
+			StudentUUID: booking.StudentUUID,
+			Status:      domain.StatusCancelled,
+			Date:        booking.ClassDate,
+			StartTime:   booking.Schedule.StartTime,
+			EndTime:     booking.Schedule.EndTime,
+			Notes:       reason,
+		}
+
+		if err := tx.Create(&newHistory).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal membuat riwayat kelas (cancel): %w", err)
+		}
+
+	} else if err == nil {
+		// If exists, update status
+		if err := tx.Model(&domain.ClassHistory{}).
+			Where("booking_id = ?", booking.ID).
+			Updates(map[string]interface{}{
+				"status": domain.StatusCancelled,
+				"notes":  reason,
+			}).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal update class history: %w", err)
+		}
+	} else {
+		tx.Rollback()
+		return err
+	}
+
+	// Commit
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("gagal menyimpan pembatalan: %w", err)
 	}

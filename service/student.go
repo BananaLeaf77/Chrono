@@ -13,6 +13,10 @@ func NewStudentUseCase(repo domain.StudentRepository) domain.StudentUseCase {
 	return &studentUseCase{repo: repo}
 }
 
+func (s *studentUseCase) GetMyClassHistory(ctx context.Context, studentUUID string) (*[]domain.ClassHistory, error) {
+	return s.repo.GetMyClassHistory(ctx, studentUUID)
+}
+
 func (s *studentUseCase) CancelBookedClass(ctx context.Context, bookingID int, studentUUID string, reason *string) error {
 	return s.repo.CancelBookedClass(ctx, bookingID, studentUUID, reason)
 }

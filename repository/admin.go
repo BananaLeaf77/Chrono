@@ -26,16 +26,17 @@ func (r *adminRepo) GetAllClassHistories(ctx context.Context) (*[]domain.ClassHi
 	var histories []domain.ClassHistory
 
 	err := r.db.WithContext(ctx).
+		Preload("Booking").
+		Preload("Booking.Schedule").
+		Preload("Booking.Schedule.Teacher").
+		Preload("Booking.Schedule.TeacherProfile.Instruments").
 		Preload("Teacher").
-		Preload("Student").
-		Preload("Instrument").
-		Preload("Package.Instrument"). // in case you want nested instrument info
 		Preload("Documentations").
 		Order("date DESC, start_time DESC").
 		Find(&histories).Error
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch class histories: %w", err)
+		return nil, fmt.Errorf("failed to fetch class history: %w", err)
 	}
 
 	return &histories, nil

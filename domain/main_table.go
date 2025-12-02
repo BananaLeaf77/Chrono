@@ -116,6 +116,7 @@ type Booking struct {
 type ClassHistory struct {
 	ID          int       `gorm:"primaryKey" json:"id"`
 	BookingID   int       `gorm:"not null;unique" json:"booking_id"`
+	Booking     Booking   `gorm:"foreignKey:BookingID;constraint:OnDelete:CASCADE;" json:"booking"`
 	TeacherUUID string    `gorm:"type:uuid;not null" json:"teacher_uuid"`
 	StudentUUID string    `gorm:"type:uuid;not null" json:"student_uuid"`
 	PackageID   *int      `json:"package_id,omitempty"`
@@ -125,7 +126,6 @@ type ClassHistory struct {
 	EndTime     time.Time `gorm:"not null" json:"end_time"`
 	Notes       *string   `json:"notes,omitempty"`
 
-	Instrument     Instrument           `gorm:"foreignKey:InstrumentID" json:"instrument"`
 	Package        *Package             `gorm:"foreignKey:PackageID" json:"package,omitempty"`
 	Teacher        User                 `gorm:"foreignKey:TeacherUUID" json:"teacher"`
 	Student        User                 `gorm:"foreignKey:StudentUUID" json:"student"`
