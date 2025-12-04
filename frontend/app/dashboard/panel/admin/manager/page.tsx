@@ -6,55 +6,44 @@ import {
   Plus,
   Trash2,
   Search,
-  GraduationCap,
+  ChevronLeft,
+  ChevronRight,
+  Briefcase,
   Mail,
+  Shield,
   Info,
 } from "lucide-react";
 import api from "@/lib/axios";
 import {
   CreateModal,
   EditModal,
-  TeacherDetailModal,
+  ManagerDetailModal,
 } from "@/app/dashboard/components/modals";
-import Pagination from "@/app/dashboard/components/pagination";
 import PerPageSelect from "@/app/dashboard/components/SelectPerPage";
-import InstrumenIcon from "@/app/dashboard/components/InstrumenIcon";
 
-interface Teacher extends Record<string, unknown> {
+interface Manager extends Record<string, unknown> {
   id: string;
   uuid: string;
   name: string;
   email: string;
   phone: string;
-  bio?: string;
   image?: string;
-  instrument_ids?: number[];
-  teacher_profile?: {
-    user_uuid: string;
-    bio: string;
-    instruments: Array<{ id: number; name: string }>;
-  };
-}
-
-interface Instrument {
-  id: number;
-  name: string;
 }
 
 const GridContent = ({
   isLoading,
   error,
-  filteredTeachers,
+  filteredManagers,
   openEditModal,
-  openDetailModal,
+  openManagerDetailModal,
   currentPage,
   itemsPerPage,
 }: {
   isLoading: boolean;
   error: string | null;
-  filteredTeachers: Teacher[];
-  openEditModal: (teacher: Teacher) => void;
-  openDetailModal: (teacher: Teacher) => void;
+  filteredManagers: Manager[];
+  openEditModal: (manager: Manager) => void;
+  openManagerDetailModal: (manager: Manager) => void;
   currentPage: number;
   itemsPerPage: number;
 }) => {
@@ -73,7 +62,7 @@ const GridContent = ({
           ></div>
         </div>
         <p className="mt-4 text-sm font-medium text-gray-600">
-          Memuat data teacher...
+          Memuat data manager...
         </p>
       </div>
     );
@@ -93,17 +82,17 @@ const GridContent = ({
     );
   }
 
-  if (filteredTeachers.length === 0) {
+  if (filteredManagers.length === 0) {
     return (
       <div className="col-span-full flex flex-col items-center justify-center py-20">
         <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-2xl flex items-center justify-center mb-4">
-          <GraduationCap className="w-10 h-10 text-purple-400" />
+          <Briefcase className="w-10 h-10 text-purple-400" />
         </div>
         <p className="text-lg font-bold text-gray-900">
-          Tidak ada teacher ditemukan
+          Tidak ada manager ditemukan
         </p>
         <p className="text-sm text-gray-500 mt-1">
-          Coba kata kunci lain atau tambahkan teacher baru
+          Coba kata kunci lain atau tambahkan manager baru
         </p>
       </div>
     );
@@ -111,32 +100,31 @@ const GridContent = ({
 
   return (
     <>
-      {filteredTeachers.map((teacher, index) => (
+      {filteredManagers.map((manager, index) => (
         <div
-          key={teacher.uuid}
-          onClick={() => openDetailModal(teacher)}
-          className="group relative bg-white border border-gray-200 rounded-2xl p-4 hover:border-purple-300 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 flex flex-col cursor-pointer"
+          key={manager.uuid}
+          onClick={() => openManagerDetailModal(manager)}
+          className="group relative bg-white border border-gray-200 rounded-2xl p-4 hover:border-purple-300 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 flex flex-col"
         >
           {/* Background Gradient Accent */}
           <div className="absolute inset-0 bg-gradient-to-br from-purple-50/50 to-indigo-50/50 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-
-          {/* Action Buttons - Top Right */}
-          <div className="absolute top-3 right-1 z-20 flex gap-2">
-            {/* Edit Button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                openEditModal(teacher);
-              }}
-              className="p-1.5 bg-white/80 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg text-gray-400 hover:text-blue-600 shadow-sm hover:shadow-md transition-all duration-200 opacity-0 group-hover:opacity-100"
-              title="Edit Teacher"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+           {/* Action Buttons - Top Right */}
+                    <div className="absolute top-3 right-1 z-20 flex gap-2">
+                      {/* Edit Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModal(manager);
+                        }}
+                        className="p-1.5 bg-white/80 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg text-gray-400 hover:text-blue-600 shadow-sm hover:shadow-md transition-all duration-200 opacity-0 group-hover:opacity-100"
+                        title="Edit Teacher"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
 
           {/* Number Badge */}
-          <div className="absolute -top-2 -left-2 w-6 h-6 bg-white border border-purple-100 text-purple-600 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm z-20 group-hover:text-white group-hover:bg-purple-600">
+          <div className="absolute -top-2 -left-2 w-6 h-6 bg-white border border-purple-100 text-purple-600 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm z-20 group-hover:text-white group-hover:bg-blue-600">
             {currentPage * itemsPerPage + index + 1}
           </div>
 
@@ -146,49 +134,28 @@ const GridContent = ({
               {/* Left: Icon or Image */}
               <div className="flex-shrink-0">
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform duration-300 overflow-hidden">
-                  {teacher.image || process.env.NEXT_PUBLIC_DEFAULT_AVATAR ? (
+                  {manager.image || process.env.NEXT_PUBLIC_MANAGER_DEFAULT_AVATAR ? (
                     <img
-                      src={teacher.image || process.env.NEXT_PUBLIC_DEFAULT_AVATAR}
-                      alt={teacher.name}
+                      src={manager.image || process.env.NEXT_PUBLIC_MANAGER_DEFAULT_AVATAR}
+                      alt={manager.name}
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <GraduationCap className="w-6 h-6 text-white" />
+                    <Shield className="w-6 h-6 text-white" />
                   )}
                 </div>
               </div>
 
               {/* Right: Info Header */}
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-bold text-gray-900 leading-tight line-clamp-1 group-hover:text-purple-700 transition-colors mb-1">
-                  {teacher.name}
+                <h3 className="text-base font-bold text-gray-900 leading-tight line-clamp-1 group-hover:text-purple-700 transition-colors mb-1">
+                  {manager.name}
                 </h3>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-1.5 text-xs text-gray-500">
                     <Mail className="w-3 h-3" />
-                    <span className="truncate">{teacher.email}</span>
+                    <span className="truncate">{manager.email}</span>
                   </div>
-                  {teacher.teacher_profile?.instruments && teacher.teacher_profile.instruments.length > 0 && (
-                  <div className="flex items-center gap-1 lg:gap-1.5">
-                    {teacher.teacher_profile.instruments.slice(0, 2).map((inst) => (
-                      <div
-                        key={inst.id}
-                        className="flex items-center gap-1 lg:gap-1.5 px-2 py-1 lg:px-3 lg:py-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 rounded-lg border border-blue-300 text-[10px] md:text-xs font-semibold hover:from-blue-100 hover:to-indigo-100 transition"
-                      >
-                        <InstrumenIcon
-                          instrumentName={inst.name}
-                          className="w-3 h-3 md:w-3.5 md:h-3.5"
-                        />
-                        <span className="capitalize">
-                          {inst.name}
-                        </span>
-                      </div>
-                    ))}
-                    {teacher.teacher_profile.instruments.length > 2 && (
-                      <span className="text-xs text-gray-500 font-semibold invisible sm:visible">...</span>
-                    )}
-                  </div>
-                )}
                 </div>
               </div>
             </div>
@@ -199,120 +166,105 @@ const GridContent = ({
   );
 };
 
-export default function TeacherPage() {
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [instruments, setInstruments] = useState<Instrument[]>([]);
+export default function ManagerPage() {
+  const [managers, setManagers] = useState<Manager[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = useState(4);
+  const [itemsPerPage, setItemsPerPage] = useState(8);
 
   // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
+  const [selectedManager, setSelectedManager] = useState<Manager | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
 
-  // Fetch all teachers and instruments
-  const fetchData = async () => {
+  // Fetch all managers
+  const fetchManagers = async () => {
     try {
       setLoading(true);
       setError(null);
-      const [teachersRes, instrumentsRes] = await Promise.all([
-        api.get("/admin/teachers"),
-        api.get("/admin/instruments"),
-      ]);
-      setTeachers(teachersRes.data?.data || []);
-      setInstruments(instrumentsRes.data?.data || []);
+      const response = await api.get("/admin/managers");
+      setManagers(response.data?.data || []);
     } catch (err) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const error = err as any;
-      setError(error.response?.data?.message || "Gagal memuat data teacher");
-      console.error("Error fetching data:", err);
+      setError(error.response?.data?.message || "Gagal memuat data manager");
+      console.error("Error fetching managers:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchManagers();
   }, []);
 
-  // Create teacher
+  // Create manager
   const handleCreate = async (data: Record<string, unknown>) => {
     try {
       setCreateError(null);
-      const response = await api.post("/admin/teachers", {
+      const response = await api.post("/admin/managers", {
         name: data.name,
         email: data.email,
         phone: data.phone,
         password: data.password,
         image: data.image,
-        bio: data.bio,
-        instrument_ids: data.instrument_ids,
       });
-      await fetchData();
+      setManagers([...managers, response.data?.data]);
       setIsCreateOpen(false);
       setCreateError(null);
     } catch (err) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const error = err as any;
-      const message = error.response?.data?.message || "Gagal membuat teacher";
+      const message = error.response?.data?.message || "Gagal membuat manager";
       setCreateError(message);
       throw new Error(message);
     }
   };
 
-  // Update teacher
+  // Update manager
   const handleUpdate = async (data: Record<string, unknown>) => {
     try {
       setEditError(null);
-      const payload: Record<string, unknown> = {
+      await api.put(`/admin/managers/modify/${selectedManager?.uuid}`, {
         name: data.name,
         email: data.email,
         phone: data.phone,
-        bio: data.bio,
-        instrument_ids: data.instrument_ids,
-      };
+      });
       
-      // Only include image if a new one was uploaded
-      if (data.image) {
-        payload.image = data.image;
-      }
-      
-      console.log("Update payload:", payload);
-      const response = await api.put(`/admin/teachers/modify/${selectedTeacher?.uuid}`, payload);
-      console.log("Update response:", response.data);
-      
-      // Update the teachers list with the new data
-      // Refresh data to ensure we have the latest state including relations
-      await fetchData();
+      // Update local state with the new data
+      setManagers(
+        managers.map((m) =>
+          m.uuid === selectedManager?.uuid 
+            ? { ...m, name: data.name as string, email: data.email as string, phone: data.phone as string }
+            : m
+        )
+      );
       setIsEditOpen(false);
       setEditError(null);
-      setSelectedTeacher(null);
+      setSelectedManager(null);
     } catch (err) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const error = err as any;
-      console.error("Full error:", error);
-      console.error("Error response:", error.response);
-      const message = error.response?.data?.message || "Gagal update teacher";
+      const message = error.response?.data?.message || "Gagal update manager";
       setEditError(message);
       throw new Error(message);
     }
   };
 
-
-  const filteredTeachers = teachers.filter(
-    (teacher) =>
-      teacher?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      teacher?.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  
+  const filteredManagers = managers.filter(
+    (manager) =>
+      manager.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      manager.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalPages = Math.ceil(filteredTeachers.length / itemsPerPage);
-  const paginatedTeachers = filteredTeachers.slice(
+  const totalPages = Math.ceil(filteredManagers.length / itemsPerPage);
+  const paginatedManagers = filteredManagers.slice(
     currentPage * itemsPerPage,
     (currentPage + 1) * itemsPerPage
   );
@@ -323,7 +275,7 @@ export default function TeacherPage() {
       label: "Nama",
       type: "text",
       required: true,
-      placeholder: "Masukkan nama teacher",
+      placeholder: "Masukkan nama manager",
     },
     {
       name: "email",
@@ -347,24 +299,6 @@ export default function TeacherPage() {
       placeholder: "Masukkan password",
     },
     {
-      name: "bio",
-      label: "Bio",
-      type: "textarea",
-      required: false,
-      placeholder: "Masukkan bio teacher",
-    },
-    {
-      name: "instrument_ids",
-      label: "Instrumen",
-      type: "select",
-      required: true,
-      isMulti: true,
-      options: instruments.map((inst) => ({
-        value: inst.id,
-        label: inst.name,
-      })),
-    },
-    {
       name: "image",
       label: "Foto Profil",
       type: "file",
@@ -377,7 +311,7 @@ export default function TeacherPage() {
       label: "Nama",
       type: "text",
       required: true,
-      placeholder: "Masukkan nama teacher",
+      placeholder: "Masukkan nama manager",
     },
     {
       name: "email",
@@ -393,29 +327,10 @@ export default function TeacherPage() {
       required: true,
       placeholder: "Masukkan nomor HP",
     },
-    {
-      name: "bio",
-      label: "Bio",
-      type: "textarea",
-      required: false,
-      placeholder: "Masukkan bio teacher",
-    },
-    {
-      name: "instrument_ids",
-      label: "Instrumen",
-      type: "select",
-      required: true,
-      isMulti: true,
-      options: instruments.map((inst) => ({
-        value: inst.id,
-        label: inst.name,
-      })),
-    },
-    {
+     {
       name: "image",
       label: "Foto Profil",
       type: "file",
-      required: false,
     },
   ];
 
@@ -427,30 +342,30 @@ export default function TeacherPage() {
           <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
             {/* Icon */}
             <div className="p-3 sm:p-4 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-lg flex-shrink-0">
-              <GraduationCap className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
+              <Briefcase className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
             </div>
             
             {/* Text Content */}
             <div className="flex-1 text-center sm:text-left">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900">
-                Kelola Teacher
+                Kelola Manager
               </h1>
               <p className="text-gray-600 text-xs sm:text-sm md:text-base leading-relaxed mt-1">
-                Kelola data teacher dan spesialisasi instrumen
+                Kelola data manager dan hak akses mereka
               </p>
             </div>
 
              {/* Add Button */}
              <button
               onClick={() => {
-                setSelectedTeacher(null);
+                setSelectedManager(null);
                 setCreateError(null);
                 setIsCreateOpen(true);
               }}
               className="mt-4 sm:mt-0 w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
             >
               <Plus className="w-5 h-5" />
-              Tambah Teacher
+              Tambah Manager
             </button>
           </div>
 
@@ -462,11 +377,11 @@ export default function TeacherPage() {
             <div className="relative z-10 flex justify-between items-end">
               <div>
                 <p className="text-xs sm:text-sm font-semibold text-white/90 mb-2 tracking-wider uppercase">
-                  Total Teacher
+                  Total Manager
                 </p>
                 <div className="flex items-center">
                   <p className="text-3xl font-black text-white drop-shadow-md">
-                    {teachers.length}
+                    {managers.length}
                   </p>
                   <span className="ml-2 text-sm sm:text-base md:text-2xl text-white/80">
                     orang
@@ -474,7 +389,7 @@ export default function TeacherPage() {
                 </div>
               </div>
               <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border-2 border-white/50">
-                <GraduationCap className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+                <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               </div>
             </div>
           </div>
@@ -489,10 +404,10 @@ export default function TeacherPage() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">
-                    Daftar Teacher
+                    Daftar Manager
                   </h2>
                   <p className="text-sm text-gray-500 mt-0.5">
-                    {filteredTeachers.length} teacher ditemukan
+                    {filteredManagers.length} manager ditemukan
                   </p>
                 </div>
               </div>
@@ -535,31 +450,14 @@ export default function TeacherPage() {
               <GridContent
                 isLoading={loading}
                 error={error}
-                filteredTeachers={paginatedTeachers}
-                openEditModal={(teacher) => {
-                  console.log("Teacher data:", teacher);
-                  
-                  // Extract instruments from teacher_profile
-                  const instruments = (teacher.teacher_profile as any)?.instruments || [];
-                  console.log("Teacher instruments:", instruments);
-                  
-                  // Prepare teacher data with instrument_ids extracted from teacher_profile.instruments
-                  const instrumentIds = instruments.map((inst: any) => inst.id) || [];
-                  console.log("Extracted instrument_ids:", instrumentIds);
-                  
-                  const teacherData = {
-                    ...teacher,
-                    instrument_ids: instrumentIds,
-                    bio: (teacher.teacher_profile as any)?.bio || "",
-                  };
-                  console.log("Final teacher data for edit:", teacherData);
-                  
-                  setSelectedTeacher(teacherData);
+                filteredManagers={paginatedManagers}
+                openEditModal={(manager) => {
+                  setSelectedManager(manager);
                   setEditError(null);
                   setIsEditOpen(true);
                 }}
-                openDetailModal={(teacher) => {
-                  setSelectedTeacher(teacher);
+                openManagerDetailModal={(manager) => {
+                  setSelectedManager(manager);
                   setIsDetailOpen(true);
                 }}
                 itemsPerPage={itemsPerPage}
@@ -567,16 +465,52 @@ export default function TeacherPage() {
               />
             </div>
 
-           {/* Pagination */}
+            {/* Pagination */}
             {totalPages > 1 && (
-              <div className="pt-2 border-t border-gray-100">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={setCurrentPage}
-                  itemsPerPage={itemsPerPage}
-                  totalItems={filteredTeachers.length}
-                />
+              <div className="pt-2 border-t border-gray-100 flex justify-between items-center mt-4">
+                <p className="text-gray-600 text-sm">
+                  Menampilkan {currentPage * itemsPerPage + 1}-
+                  {Math.min(
+                    (currentPage + 1) * itemsPerPage,
+                    filteredManagers.length
+                  )}{" "}
+                  dari {filteredManagers.length}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                    disabled={currentPage === 0}
+                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    {Array.from({ length: totalPages }, (_, i) => i).map(
+                      (page) => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-2 rounded-lg transition ${
+                            currentPage === page
+                              ? "bg-purple-600 text-white font-bold"
+                              : "border border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          {page + 1}
+                        </button>
+                      )
+                    )}
+                  </div>
+                  <button
+                    onClick={() =>
+                      setCurrentPage(Math.min(totalPages - 1, currentPage + 1))
+                    }
+                    disabled={currentPage === totalPages - 1}
+                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -591,7 +525,7 @@ export default function TeacherPage() {
           setCreateError(null);
         }}
         onSubmit={handleCreate}
-        title="Tambah Teacher Baru"
+        title="Tambah Manager Baru"
         fields={createFields}
         error={createError}
       />
@@ -601,22 +535,21 @@ export default function TeacherPage() {
         onClose={() => {
           setIsEditOpen(false);
           setEditError(null);
-          setSelectedTeacher(null);
+          setSelectedManager(null);
         }}
         onSubmit={handleUpdate}
-        title="Edit Teacher"
-        initialData={selectedTeacher || ({} as Record<string, unknown>)}
+        title="Edit Manager"
+        initialData={selectedManager || ({} as Record<string, unknown>)}
         fields={editFields}
         error={editError}
       />
-
-      <TeacherDetailModal
+      <ManagerDetailModal
         isOpen={isDetailOpen}
         onClose={() => {
           setIsDetailOpen(false);
-          setSelectedTeacher(null);
+          setSelectedManager(null);
         }}
-        teacherDetail={selectedTeacher}
+        managerDetail={selectedManager}
       />
     </div>
   );

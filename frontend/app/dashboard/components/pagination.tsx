@@ -34,7 +34,7 @@ const Pagination: React.FC<PaginationProps> = ({
   const paginationButtons = useMemo(() => {
     const buttons: React.ReactNode[] = [];
     const maxVisibleButtons = windowWidth < 768 ? 3 : 5;
-    // ✅ FIX: Simplify logic - show first/last jika totalPages > maxVisibleButtons
+    
     const showFirstLastButtons = totalPages > maxVisibleButtons;
 
     // First Page
@@ -43,7 +43,7 @@ const Pagination: React.FC<PaginationProps> = ({
         <button
           key="first"
           onClick={() => onPageChange(0)}
-          className="px-3 py-1.5 rounded text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
+          className="px-2.5 py-1 rounded text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
           aria-label="First page"
         >
           &laquo;
@@ -57,7 +57,7 @@ const Pagination: React.FC<PaginationProps> = ({
         key="prev"
         onClick={() => onPageChange(Math.max(0, currentPage - 1))}
         disabled={currentPage === 0}
-        className="px-3 py-1.5 rounded text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="px-2.5 py-1 rounded text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         aria-label="Previous page"
       >
         &lt;
@@ -77,7 +77,7 @@ const Pagination: React.FC<PaginationProps> = ({
         <button
           key={i}
           onClick={() => onPageChange(i)}
-          className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+          className={`px-2.5 py-1 rounded text-sm font-medium transition-colors ${
             currentPage === i
               ? 'bg-blue-600 text-white'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -96,7 +96,7 @@ const Pagination: React.FC<PaginationProps> = ({
         key="next"
         onClick={() => onPageChange(Math.min(totalPages - 1, currentPage + 1))}
         disabled={currentPage === totalPages - 1}
-        className="px-3 py-1.5 rounded text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="px-2.5 py-1 rounded text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         aria-label="Next page"
       >
         &gt;
@@ -109,7 +109,7 @@ const Pagination: React.FC<PaginationProps> = ({
         <button
           key="last"
           onClick={() => onPageChange(totalPages - 1)}
-          className="px-3 py-1.5 rounded text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
+          className="px-2.5 py-1 rounded text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
           aria-label="Last page"
         >
           &raquo;
@@ -125,15 +125,15 @@ const Pagination: React.FC<PaginationProps> = ({
   return (
     <div className="flex flex-col items-center gap-4 mt-6 bg-white p-4 shadow-sm border border-gray-300 rounded-lg w-full">
       <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3 text-sm text-gray-700">
-        <div className="whitespace-nowrap">
+        <div className="whitespace-nowrap text-xs md:text-sm">
           {totalItems > 0 ? (
             <>
-              Showing <span className="font-semibold">{paginationInfo.start}</span> to{' '}
-              <span className="font-semibold">{paginationInfo.end}</span> of{' '}
-              <span className="font-semibold">{totalItems}</span> entries
+              Menampilkan <span className="font-semibold">{paginationInfo.start}</span> to{' '}
+              <span className="font-semibold">{paginationInfo.end}</span> dari{' '}
+              <span className="font-semibold">{totalItems}</span> entri
             </>
           ) : (
-            'No entries found'
+            'Tidak ada entri ditemukan'
           )}
         </div>
 

@@ -4,102 +4,107 @@ import { Music, Plus, Edit2, Search } from "lucide-react";
 import InstrumenIcon from "@/app/dashboard/components/InstrumenIcon";
 import { CreateModal, EditModal } from "@/app/dashboard/components/modals";
 import Pagination from "@/app/dashboard/components/pagination";
+import PerPageSelect from "@/app/dashboard/components/SelectPerPage";
 
 import api from "@/lib/axios";
 
-// Table content component to handle different states
+// Table content component to handle different states - GRID CARD VERSION
 const TableContent = ({
   isLoading,
-  error,
   filteredInstruments,
   openEditModal,
   currentPage,
   itemsPerPage,
-}: // openDeleteModal,
-{
+}: {
   isLoading: boolean;
-  error: string | null;
   filteredInstruments: Instrument[];
-
   openEditModal: (instrument: Instrument) => void;
   currentPage: number;
   itemsPerPage: number;
-  // openDeleteModal: (instrument: Instrument) => void;
 }) => {
   if (isLoading) {
     return (
-      <tr>
-        <td colSpan={5} className="px-6 py-20 text-center text-gray-500">
-          <div className="flex items-center justify-center space-x-2">
-            <div className="w-4 h-4 bg-purple-600 rounded-full animate-bounce"></div>
-            <div
-              className="w-4 h-4 bg-purple-600 rounded-full animate-bounce"
-              style={{ animationDelay: "0.2s" }}
-            ></div>
-            <div
-              className="w-4 h-4 bg-purple-600 rounded-full animate-bounce"
-              style={{ animationDelay: "0.4s" }}
-            ></div>
-          </div>
-          <p className="mt-4 text-sm">Memuat data instrumen...</p>
-        </td>
-      </tr>
+      <div className="col-span-full flex flex-col items-center justify-center py-20">
+        <div className="flex items-center justify-center space-x-3">
+          <div className="w-3 h-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full animate-bounce"></div>
+          <div
+            className="w-3 h-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full animate-bounce"
+            style={{ animationDelay: "0.2s" }}
+          ></div>
+          <div
+            className="w-3 h-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full animate-bounce"
+            style={{ animationDelay: "0.4s" }}
+          ></div>
+        </div>
+        <p className="mt-4 text-sm font-medium text-gray-600">
+          Memuat data instrumen...
+        </p>
+      </div>
     );
   }
 
   if (filteredInstruments.length === 0) {
     return (
-      <tr>
-        <td colSpan={5} className="px-6 py-20 text-center text-gray-500">
-          <Music className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-          <p className="text-lg font-semibold">
-            Tidak ada instrumen yang cocok dengan pencarian Anda.
-          </p>
-          <p className="text-sm text-gray-400 mt-1">
-            Coba kata kunci lain atau tambahkan instrumen baru.
-          </p>
-        </td>
-      </tr>
+      <div className="col-span-full flex flex-col items-center justify-center py-20">
+        <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-2xl flex items-center justify-center mb-4">
+          <Music className="w-10 h-10 text-purple-400" />
+        </div>
+        <p className="text-lg font-bold text-gray-900">
+          Tidak ada instrumen yang ditemukan
+        </p>
+        <p className="text-sm text-gray-500 mt-1">
+          Coba kata kunci lain atau tambahkan instrumen baru
+        </p>
+      </div>
     );
   }
 
   return (
     <>
       {filteredInstruments.map((instrument, index) => (
-        <tr
+        <div
           key={instrument.id}
-          className="hover:bg-purple-50/50 transition duration-150"
+          className="group relative bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 hover:border-purple-300 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
         >
-          <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-600">
-            {currentPage * itemsPerPage + index + 1}
-          </td>
-          <td className="px-4 sm:px-6 py-3 whitespace-nowrap">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="flex-shrink-0">
-                  <InstrumenIcon
-                    instrumentName={instrument.name || ""}
-                    className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600"
-                  />
-                </div>
-                <span className="text-sm sm:text-base font-semibold text-gray-900">
+          {/* Background Gradient Accent */}
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-50/40 to-indigo-50/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+          {/* Content */}
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* Icon Container */}
+              <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <InstrumenIcon
+                  instrumentName={instrument.name || ""}
+                  className="w-8 h-8 text-white"
+                />
+              </div>
+
+              {/* Text Content */}
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 group-hover:text-black">
+                  Instrumen
+                </p>
+                <h3 className="text-lg font-bold text-gray-900 capitalize group-hover:text-purple-600 transition-colors">
                   {instrument.name}
-                </span>
+                </h3>
               </div>
             </div>
-          </td>
-          <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-right">
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => openEditModal(instrument)}
-                className="p-1.5 sm:p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition shadow hover:shadow-lg transform hover:scale-105 active:scale-100"
-                title="Edit Instrumen"
-              >
-                <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-          </td>
-        </tr>
+
+            <button
+              onClick={() => openEditModal(instrument)}
+              className="opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all duration-300 p-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl text-gray-600 hover:text-purple-600 shadow-sm hover:shadow-md"
+              title="Edit Instrumen"
+            >
+              <Edit2 className="w-4 h-4 text-blue-700" />
+            </button>
+          </div>
+
+          {/* Number Badge */}
+          <div className="absolute -top-3 -left-3 w-8 h-8 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-lg">
+            {currentPage * itemsPerPage + index + 1}
+          </div>
+        </div>
       ))}
     </>
   );
@@ -231,7 +236,7 @@ export default function AdminInstrumentManagement() {
   const filteredInstruments = instruments.filter((inst) =>
     (inst?.name || "").toLowerCase().includes((searchQuery || "").toLowerCase())
   );
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [itemsPerPage, setItemsPerPage] = useState(4);
   const totalItems = filteredInstruments.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
@@ -382,15 +387,15 @@ export default function AdminInstrumentManagement() {
   }, [filteredInstruments, currentPage, itemsPerPage]);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 font-inter">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 text-gray-800 font-inter">
       {/* SUCCESS NOTIFICATION */}
       {success && (
         <div className="fixed top-4 right-4 z-50 max-w-md animate-in fade-in slide-in-from-top-2">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg">
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-300 rounded-2xl p-4 shadow-xl backdrop-blur-sm">
             <div className="flex items-start gap-3">
-              <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg">
                 <svg
-                  className="w-3 h-3 text-white"
+                  className="w-3.5 h-3.5 text-white"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -404,16 +409,14 @@ export default function AdminInstrumentManagement() {
                 </svg>
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-green-800">
-                  {success}
-                </p>
+                <p className="text-sm font-bold text-green-800">{success}</p>
               </div>
               <button
                 onClick={() => setSuccess(null)}
-                className="text-green-600 hover:text-green-700 flex-shrink-0"
+                className="text-green-600 hover:text-green-700 flex-shrink-0 transition"
               >
                 <svg
-                  className="w-4 h-4"
+                  className="w-5 h-5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -431,129 +434,136 @@ export default function AdminInstrumentManagement() {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto">
-        {/* Judul Halaman */}
-        <div className="mb-10 p-6 bg-white rounded-xl shadow-lg border-l-4 border-purple-600">
-          <h1 className="text-3xl font-extrabold text-gray-900 flex items-center gap-3">
-            <Music className="w-8 h-8 text-purple-600" />
-            Manajemen Data Instrumen
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Dasbor admin untuk mengelola daftar instrumen musik yang tersedia.
-          </p>
-        </div>
+      <main className="max-w-7xl mx-auto px-2 space-y-4">
+        {/* Header Section */}
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200">
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+            {/* Icon */}
+            <div className="p-3 sm:p-4 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-lg flex-shrink-0">
+              <Music className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
+            </div>
+            
+            {/* Text Content */}
+            <div className="flex-1 text-center sm:text-left">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900">
+                Instrumen Musik
+              </h1>
+              <p className="text-gray-600 text-xs sm:text-sm md:text-base leading-relaxed mt-1">
+                Kelola daftar instrumen musik yang tersedia di platform
+              </p>
+            </div>
+          </div>
+       
+          
+          {/* Stats Card (Modern Blue/Indigo) */}
+          <div className="bg-gradient-to-br from-indigo-600 to-sky-500 rounded-2xl p-5 sm:p-6 shadow-2xl relative overflow-hidden mt-4">
+          <div className="absolute -right-8 -bottom-8 w-40 h-40 bg-indigo-500/20 rounded-full"></div>
+          <div className="absolute right-4 top-4 w-20 h-20 bg-sky-400/10 rounded-full"></div>
 
-        {/* Stats Cards */}
-        <div className="gap-4 mb-10">
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 shadow-lg relative overflow-hidden">
-            <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-purple-400/20 rounded-full"></div>
-            <div className="absolute right-8 top-8 w-16 h-16 bg-purple-400/10 rounded-full"></div>
-
-            <div className="relative z-10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-white/90 mb-2 tracking-wider">
-                    TOTAL INSTRUMEN
-                  </p>
-                  <div className="flex items-center">
-                    <p className="md:text-4xl text-2xl font-black text-white">
-                      {instruments.length}
-                    </p>
-                    <span className="ml-1 text-xl text-white">alat musik</span>
-                  </div>
-                </div>
-                <div className="w-12 h-12 bg-white/15 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                  <Music className="w-6 h-6 text-white" />
-                </div>
+          <div className="relative z-10 flex justify-between items-end">
+            <div>
+              <p className="text-xs sm:text-sm font-semibold text-white/90 mb-2 tracking-wider uppercase">
+                Total Instrumen Terdaftar
+              </p>
+              <div className="flex items-center">
+                <p className="text-3xl font-black text-white drop-shadow-md">
+                  {instruments.length}
+                </p>
+                <span className="ml-2 text-sm sm:text-base md:text-xl text-white/80">
+                  alat musik
+                </span>
               </div>
+            </div>
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border-2 border-white/50">
+              <Music className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
           </div>
         </div>
+         </div>
 
-        {/* Table Card */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
-          <div className="p-4 sm:p-6 border-b border-gray-100 bg-gray-50/80">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-                  Daftar Instrumen{" "}
-                  <span className="text-purple-600">
-                    ({filteredInstruments.length})
-                  </span>
-                </h2>
+        {/* Content Card */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-300">
+          {/* Header */}
+          <div className="px-6 sm:px-8 py-7 border-b rounded-t-2xl border-gray-300 bg-gradient-to-r from-gray-50 to-gray-100/50">
+            <div className="space-y-5">
+              {/* Title & Button */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Kiri: Judul + counter */}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">
+                    Daftar Instrumen
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    {filteredInstruments.length} instrumen tersedia
+                  </p>
+                </div>
+
                 <button
                   onClick={() => setIsAddModalOpen(true)}
-                  className="inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 shadow-lg shadow-purple-300/50 transition-all duration-300 hover:shadow-xl hover:scale-[1.02] active:scale-100"
+                  className="flex items-center justify-center gap-2.5 px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 
+                  hover:from-purple-700 hover:to-indigo-700 text-white font-bold rounded-xl 
+                  shadow-lg shadow-purple-500/30 hover:shadow-xl hover:scale-105 active:scale-95 
+                  transition-all duration-300 whitespace-nowrap min-w-[140px] sm:min-w-0"
                 >
-                  <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="hidden sm:inline">Tambah Baru</span>
-                  <span className="sm:hidden">Tambah</span>
+                  <Plus className="w-5 h-5" />
+                  <span className="hidden xs:inline">Tambah Instrumen</span>
+                  <span className="xs:hidden">Tambah</span>
                 </button>
               </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Cari nama instrumen..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white text-gray-800 rounded-xl border border-gray-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none transition duration-150 shadow-sm"
-                />
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-600">Show</span>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(0);
-                  }}
-                  className="bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  {[5, 10, 50, 100].map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-gray-600">entries</span>
+
+              {/* Search & Filter */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama instrumen..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-white text-gray-900 rounded-xl border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition duration-200 shadow-sm placeholder-gray-400"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-semibold text-gray-700">
+                    Tampilkan:
+                  </label>
+                  <PerPageSelect
+                    value={itemsPerPage}
+                    onChange={(val) => {
+                      setItemsPerPage(val);
+                      setCurrentPage(0);
+                    }}
+                    options={[4, 8, 20, 100]}
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50/80">
-                <tr>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    No
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    Nama Instrumen
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    Aksi
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                <TableContent
-                  isLoading={isLoading}
-                  error={error}
-                  filteredInstruments={paginatedInstruments}
-                  openEditModal={openEditModal}
-                  itemsPerPage={itemsPerPage}
+          {/* Grid Content */}
+          <div className="p-6 sm:p-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              <TableContent
+                isLoading={isLoading}
+                filteredInstruments={paginatedInstruments}
+                openEditModal={openEditModal}
+                itemsPerPage={itemsPerPage}
+                currentPage={currentPage}
+              />
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="pt-2 border-t border-gray-100">
+                <Pagination
                   currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  itemsPerPage={itemsPerPage}
+                  totalItems={totalItems}
                 />
-              </tbody>
-            </table>
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-              itemsPerPage={itemsPerPage}
-              totalItems={totalItems}
-            />
+              </div>
+            )}
           </div>
         </div>
       </main>

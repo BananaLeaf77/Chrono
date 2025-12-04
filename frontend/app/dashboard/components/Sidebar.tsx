@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MdClass } from "react-icons/md";
 import {
   Home,
   ListMusic,
@@ -10,9 +11,10 @@ import {
   Music2,
   Settings,
   HelpCircle,
-  BookOpen,
   GraduationCap,
   Package,
+  School,
+  IdCard,
 } from "lucide-react";
 
 // Fixed color scheme for menu items (up to 6 items)
@@ -65,21 +67,24 @@ const menuItems = {
   admin: [
     { title: "Dashboard", icon: <Home size={20} />, path: "/dashboard/panel/admin" },
     { title: "Instrumen", icon: <ListMusic size={20} />, path: "/dashboard/panel/admin/instrument" },
-    { title: "Guru", icon: <GraduationCap size={20} />, path: "/dashboard/panel/admin/teachers" },
-    { title: "Manager", icon: <Users size={20} />, path: "/dashboard/panel/admin/managers" },
-    { title: "Murid", icon: <Users size={20} />, path: "/dashboardAdmin/students" },
+    { title: "Guru", icon: <GraduationCap size={20} />, path: "/dashboard/panel/admin/teacher" },
+    { title: "Manager", icon: <Users size={20} />, path: "/dashboard/panel/admin/manager" },
+    { title: "Murid", icon: <Users size={20} />, path: "/dashboard/panel/admin/student" },
     { title: "Paket", icon: <Package size={20} />, path: "/dashboard/panel/admin/package" },
   ],
   teacher: [
     { title: "Dashboard", icon: <Home size={20} />, path: "/dashboard/panel/teacher" },
-    { title: "My Schedule", icon: <CalendarDays size={20} />, path: "/dashboardTeacher/schedule" },
-    { title: "My Students", icon: <Users size={20} />, path: "/dashboardTeacher/students" },
-    { title: "Course Materials", icon: <BookOpen size={20} />, path: "/dashboardTeacher/materials" },
+    { title: "Jadwal", icon: <CalendarDays size={20} />, path: "/dashboard/panel/teacher/schedule" },
+    { title: "Kelas", icon: <MdClass size={20} />, path: "/dashboard/panel/teacher/class" },
   ],
   student: [
     { title: "Dashboard", icon: <Home size={20} />, path: "/dashboard/panel/student" },
-    { title: "My Schedule", icon: <CalendarDays size={20} />, path: "/dashboardStudent/schedule" },
-    { title: "My Courses", icon: <Music2 size={20} />, path: "/dashboardStudent/courses" },
+    { title: "Kelas Musik", icon: <Music2 size={20} />, path: "/dashboardStudent/schedule" },
+    { title: "Kelas Saya", icon: <School size={20} />, path: "/dashboardStudent/courses" },
+  ],
+  management: [
+    { title: "Dashboard", icon: <Home size={20} />, path: "/dashboard/panel/manager" },
+    { title: "Data Murid", icon: <IdCard size={20} />, path: "/dashboard/panel/manager/my-student" },
   ],
 };
 

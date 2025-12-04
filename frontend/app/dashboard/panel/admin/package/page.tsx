@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Package2,
   Plus,
@@ -8,7 +8,10 @@ import {
   Music,
   AlertTriangle,
 } from "lucide-react";
-import { CreateModal, EditModal } from "@/app/dashboard/components/modals";
+import InstrumenIcon from "@/app/dashboard/components/InstrumenIcon";
+import { CreateModal, EditModal, PackageDetailModal } from "@/app/dashboard/components/modals";
+import Pagination from "@/app/dashboard/components/pagination";
+import PerPageSelect from "@/app/dashboard/components/SelectPerPage";
 import api from "@/lib/axios";
 
 // Interface untuk data Package
@@ -32,116 +35,149 @@ interface Instrument {
   name: string;
 }
 
-// Table content component
-const TableContent = ({
+const GridContent = ({
   isLoading,
   error,
   filteredPackages,
   openEditModal,
-  openDeleteModal,
+  openDetailModal,
+  currentPage,
+  itemsPerPage,
 }: {
   isLoading: boolean;
   error: string | null;
   filteredPackages: Package[];
   openEditModal: (pkg: Package) => void;
-  openDeleteModal: (pkg: Package) => void;
+  openDetailModal: (pkg: Package) => void;
+  currentPage: number;
+  itemsPerPage: number;
 }) => {
   if (isLoading) {
     return (
-      <tr>
-        <td colSpan={6} className="px-6 py-20 text-center text-gray-500">
-          <div className="flex items-center justify-center space-x-2">
-            <div className="w-4 h-4 bg-purple-600 rounded-full animate-bounce"></div>
-            <div
-              className="w-4 h-4 bg-purple-600 rounded-full animate-bounce"
-              style={{ animationDelay: "0.2s" }}
-            ></div>
-            <div
-              className="w-4 h-4 bg-purple-600 rounded-full animate-bounce"
-              style={{ animationDelay: "0.4s" }}
-            ></div>
-          </div>
-          <p className="mt-4 text-sm">Memuat data paket...</p>
-        </td>
-      </tr>
+      <div className="col-span-full flex flex-col items-center justify-center py-20">
+        <div className="flex items-center justify-center space-x-3">
+          <div className="w-3 h-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full animate-bounce"></div>
+          <div
+            className="w-3 h-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full animate-bounce"
+            style={{ animationDelay: "0.2s" }}
+          ></div>
+          <div
+            className="w-3 h-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full animate-bounce"
+            style={{ animationDelay: "0.4s" }}
+          ></div>
+        </div>
+        <p className="mt-4 text-sm font-medium text-gray-600">
+          Memuat data paket...
+        </p>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <tr>
-        <td colSpan={6} className="px-6 py-20 text-center text-red-500">
-          <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <p className="text-lg font-semibold">{error}</p>
-          <p className="text-sm text-gray-400 mt-1">
-            Silakan coba muat ulang halaman
-          </p>
-        </td>
-      </tr>
+      <div className="col-span-full flex flex-col items-center justify-center py-20">
+        <div className="w-20 h-20 bg-gradient-to-br from-red-100 to-orange-100 rounded-2xl flex items-center justify-center mb-4">
+          <AlertTriangle className="w-10 h-10 text-red-400" />
+        </div>
+        <p className="text-lg font-bold text-gray-900">{error}</p>
+        <p className="text-sm text-gray-500 mt-1">
+          Silakan coba muat ulang halaman
+        </p>
+      </div>
     );
   }
 
   if (filteredPackages.length === 0) {
     return (
-      <tr>
-        <td colSpan={6} className="px-6 py-20 text-center text-gray-500">
-          <Package2 className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-          <p className="text-lg font-semibold">
-            Tidak ada paket yang cocok dengan pencarian Anda.
-          </p>
-          <p className="text-sm text-gray-400 mt-1">
-            Coba kata kunci lain atau tambahkan paket baru.
-          </p>
-        </td>
-      </tr>
+      <div className="col-span-full flex flex-col items-center justify-center py-20">
+        <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-2xl flex items-center justify-center mb-4">
+          <Package2 className="w-10 h-10 text-purple-400" />
+        </div>
+        <p className="text-lg font-bold text-gray-900">
+          Tidak ada paket yang ditemukan
+        </p>
+        <p className="text-sm text-gray-500 mt-1">
+          Coba kata kunci lain atau tambahkan paket baru
+        </p>
+      </div>
     );
   }
 
   return (
     <>
       {filteredPackages.map((pkg, index) => (
-        <tr
+        <div
           key={pkg.id}
-          className="hover:bg-purple-50/50 transition duration-150"
+          className="group relative bg-white border border-gray-200 rounded-2xl p-4 hover:border-purple-300 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 flex flex-col"
         >
-          <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-600">
-            {index + 1}
-          </td>
-          <td className="px-4 sm:px-6 py-3 whitespace-nowrap">
-            <div className="flex items-center gap-3">
-              <span className="text-sm sm:text-base font-semibold text-gray-900">
-                {pkg.name}
-              </span>
+          {/* Background Gradient Accent */}
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-50/50 to-indigo-50/50 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+          {/* Edit Button - Top Right (Absolute) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openEditModal(pkg);
+            }}
+            className="absolute top-3 right-3 z-20 p-1.5 bg-white/80 hover:bg-white border border-gray-200 hover:border-blue-300 rounded-lg text-gray-400 hover:text-blue-600 shadow-sm hover:shadow-md transition-all duration-200 opacity-0 group-hover:opacity-100"
+            title="Edit Paket"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Number Badge */}
+          <div className="absolute -top-2 -left-2 w-6 h-6 bg-white border border-purple-100 text-purple-600 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm z-20 group-hover:text-white group-hover:bg-blue-600">
+            {currentPage * itemsPerPage + index + 1}
+          </div>
+
+          {/* Content */}
+          <div className="relative z-10 h-full flex flex-col">
+            <div className="flex gap-4">
+              {/* Left: Icon */}
+              <div className="flex-shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform duration-300">
+                  <InstrumenIcon
+                    instrumentName={pkg.instrument?.name || ""}
+                    className="w-6 h-6 text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Right: Info Header */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider bg-purple-50 px-1.5 py-0.5 rounded-md">
+                    {pkg.instrument?.name || "Umum"}
+                  </span>
+                  <span className="text-[10px] font-medium text-gray-400 group-hover:text-black transition-colors">
+                    {pkg.quota} Sesi
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-gray-900 leading-tight line-clamp-1 group-hover:text-purple-700 transition-colors">
+                  {pkg.name}
+                </h3>
+              </div>
             </div>
-          </td>
-          <td className="px-4 sm:px-6 py-3 whitespace-nowrap">
-            <div className="flex items-center">
-              <Music className="w-4 h-4 text-purple-600 mr-2" />
-              <span className="text-sm text-gray-600">
-                {pkg.instrument?.name || "Tidak ada"}
-              </span>
-            </div>
-          </td>
-          <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-sm text-gray-600">
-            {pkg.quota} pertemuan
-          </td>
-          <td className="px-4 sm:px-6 py-3 whitespace-nowrap">
-            <div className="max-w-xs truncate text-sm text-gray-500">
-              {pkg.description || "-"}
-            </div>
-          </td>
-          <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-right">
-            <div className="flex items-center justify-end gap-2">
+
+            {/* Description & Action - Full Width */}
+            <div className="mt-3 pl-1">
+              <p className="text-xs text-gray-500 inline leading-relaxed">
+                {pkg.description
+                  ? pkg.description.split(" ").slice(0, 4).join(" ") + "..."
+                  : "Detail paket..."}{" "}
+              </p>
               <button
-                onClick={() => openEditModal(pkg)}
-                className="p-1.5 sm:p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition shadow hover:shadow-lg transform hover:scale-105 active:scale-100"
-                title="Edit Paket"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openDetailModal(pkg);
+                }}
+                className="text-xs font-medium text-gray-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1"
               >
-                <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                Selengkapnya
               </button>
             </div>
-          </td>
-        </tr>
+          </div>
+        </div>
       ))}
     </>
   );
@@ -211,11 +247,12 @@ export default function AdminPackageManagement() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
- 
+
   const [editingPackage, setEditingPackage] = useState<Package | null>(null);
-  const [packageToDelete, setPackageToDelete] = useState<Package | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(4);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -311,14 +348,9 @@ export default function AdminPackageManagement() {
     }
   };
 
-
   const openEditModal = (pkg: Package) => {
     setEditingPackage(pkg);
     setIsEditModalOpen(true);
-  };
-
-  const openDeleteModal = (pkg: Package) => {
-    setPackageToDelete(pkg);
   };
 
   // --- Fungsi Filter ---
@@ -329,8 +361,25 @@ export default function AdminPackageManagement() {
       pkg.instrument?.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const totalItems = filteredPackages.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  const paginatedPackages = useMemo(() => {
+    const start = currentPage * itemsPerPage;
+    const end = start + itemsPerPage;
+    return filteredPackages.slice(start, end);
+  }, [filteredPackages, currentPage, itemsPerPage]);
+
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
+
+  const openDetailModal = (pkg: Package) => {
+    setSelectedPackage(pkg);
+    setIsDetailModalOpen(true);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 font-inter">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 text-gray-800 font-inter">
       {/* SUCCESS NOTIFICATION */}
       {success && (
         <div className="fixed top-4 right-4 z-50 max-w-md animate-in fade-in slide-in-from-top-2">
@@ -379,114 +428,147 @@ export default function AdminPackageManagement() {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto">
-        {/* Judul Halaman */}
-        <div className="mb-10 p-6 bg-white rounded-xl shadow-lg border-l-4 border-purple-600">
-          <h1 className="text-3xl font-extrabold text-gray-900 flex items-center gap-3">
-            <Package2 className="w-8 h-8 text-purple-600" />
-            Manajemen Paket Pembelajaran
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Kelola paket pembelajaran untuk setiap instrumen musik yang
-            tersedia.
-          </p>
-        </div>
+      <main className="max-w-7xl mx-auto px-2 space-y-4">
+        {/* Header Section */}
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200">
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+            {/* Icon */}
+            <div className="p-3 sm:p-4 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-lg flex-shrink-0">
+              <Package2 className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
+            </div>
+            
+            {/* Text Content */}
+            <div className="flex-1 text-center sm:text-left">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900">
+                Paket Pembelajaran
+              </h1>
+              <p className="text-gray-600 text-xs sm:text-sm md:text-base leading-relaxed mt-1">
+                Kelola paket pembelajaran untuk setiap instrumen musik yang tersedia di platform
+              </p>
+            </div>
+          </div>
 
-        {/* Stats Cards */}
-        <div className="gap-4 mb-10">
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 shadow-lg relative overflow-hidden">
-            <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-purple-400/20 rounded-full"></div>
-            <div className="absolute right-8 top-8 w-16 h-16 bg-purple-400/10 rounded-full"></div>
+          {/* Stats Card */}
+          <div className="bg-gradient-to-br from-indigo-600 to-sky-500 rounded-2xl p-3 shadow-2xl relative overflow-hidden mt-4">
+            <div className="absolute -right-8 -bottom-8 w-40 h-40 bg-indigo-500/20 rounded-full"></div>
+            <div className="absolute right-4 top-4 w-20 h-20 bg-sky-400/10 rounded-full"></div>
 
-            <div className="relative z-10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-white/90 mb-2 tracking-wider">
-                    TOTAL PAKET
+            <div className="relative z-10 flex justify-between items-end">
+              <div>
+                <p className="text-xs sm:text-sm font-semibold text-white/90 mb-2 tracking-wider uppercase">
+                  Total Paket Terdaftar
+                </p>
+                <div className="flex items-center">
+                  <p className="text-3xl font-black text-white drop-shadow-md">
+                    {packages.length}
                   </p>
-                  <div className="flex items-center">
-                    <p className="md:text-4xl text-2xl font-black text-white">
-                      {packages.length}
-                    </p>
-                    <span className="ml-1 text-xl text-white">paket</span>
-                  </div>
+                  <span className="ml-2 text-sm sm:text-base md:text-2xl text-white/80">
+                    paket
+                  </span>
                 </div>
-                <div className="w-12 h-12 bg-white/15 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                  <Package2 className="w-6 h-6 text-white" />
-                </div>
+              </div>
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border-2 border-white/50">
+                <Package2 className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               </div>
             </div>
           </div>
         </div>
+        
 
-        {/* Table Card */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
-          <div className="p-4 sm:p-6 border-b border-gray-100 bg-gray-50/80">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-                  Daftar Paket{" "}
-                  <span className="text-purple-600">
-                    ({filteredPackages.length})
-                  </span>
-                </h2>
+        {/* Content Card */}
+        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
+          {/* Header */}
+          <div className="px-6 sm:px-8 py-8 border border-gray-300  rounded-t-3xl bg-gradient-to-r from-gray-50 to-gray-100/50">
+            <div className="space-y-5">
+              {/* Title & Button */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Kiri: Judul + counter */}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">
+                    Daftar Paket
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    {filteredPackages.length} paket tersedia
+                  </p>
+                </div>
+
                 <button
                   onClick={() => setIsAddModalOpen(true)}
-                  className="inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 shadow-lg shadow-purple-300/50 transition-all duration-300 hover:shadow-xl hover:scale-[1.02] active:scale-100"
+                  className="flex items-center justify-center gap-2.5 px-5 py-3 
+                 bg-gradient-to-r from-purple-600 to-indigo-600 
+                 hover:from-purple-700 hover:to-indigo-700 
+                 text-white font-bold rounded-xl 
+                 shadow-lg shadow-purple-500/30 
+                 hover:shadow-xl hover:scale-105 
+                 active:scale-95 
+                 transition-all duration-300 
+                 whitespace-nowrap
+                 min-w-[140px] sm:min-w-0"
                 >
-                  <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="hidden sm:inline">Tambah Baru</span>
-                  <span className="sm:hidden">Tambah</span>
+                  <Plus className="w-5 h-5" />
+                  <span className="hidden xs:inline">Tambah Paket</span>
+                  <span className="xs:hidden">Tambah</span>
                 </button>
               </div>
 
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Cari nama paket atau instrumen..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white text-gray-800 rounded-xl border border-gray-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none transition duration-150 shadow-sm"
-                />
+              {/* Search & Filter */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama paket atau instrumen..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(0);
+                    }}
+                    className="w-full pl-12 pr-4 py-3 bg-white text-gray-900 rounded-xl border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition duration-200 shadow-sm placeholder-gray-400"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-semibold text-gray-700">
+                    Tampilkan:
+                  </label>
+                  <PerPageSelect
+                    value={itemsPerPage}
+                    onChange={(val) => {
+                      setItemsPerPage(val);
+                      setCurrentPage(0);
+                    }}
+                    options={[4, 8, 20, 100]}
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50/80">
-                <tr>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    No
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    Nama Paket
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    Instrumen
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    Kuota
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    Deskripsi
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    Aksi
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                <TableContent
-                  isLoading={isLoading}
-                  error={error}
-                  filteredPackages={filteredPackages}
-                  openEditModal={openEditModal}
-                  openDeleteModal={openDeleteModal}
+          {/* Grid Content */}
+          <div className="p-6 sm:p-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              <GridContent
+                isLoading={isLoading}
+                error={error}
+                filteredPackages={paginatedPackages}
+                openEditModal={openEditModal}
+                openDetailModal={openDetailModal}
+                itemsPerPage={itemsPerPage}
+                currentPage={currentPage}
+              />
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="pt-2 border-t border-gray-100">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  itemsPerPage={itemsPerPage}
+                  totalItems={totalItems}
                 />
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -588,7 +670,15 @@ export default function AdminPackageManagement() {
         ]}
       />
 
-      
+      {/* Detail Modal */}
+      <PackageDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedPackage(null);
+        }}
+        packageData={selectedPackage}
+      />
     </div>
   );
 }

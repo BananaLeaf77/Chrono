@@ -29,6 +29,24 @@ const Profile: React.FC<ProfileProps> = ({ user, logout }) => {
     }
   };
 
+  const getAvatarUrl = () => {
+    if (user.avatar) return user.avatar;
+
+    const role = user.role.toLowerCase();
+
+    if (role === "admin" && process.env.NEXT_PUBLIC_ADMIN_DEFAULT_AVATAR) {
+      return process.env.NEXT_PUBLIC_ADMIN_DEFAULT_AVATAR;
+    }
+
+    if (role === "management" && process.env.NEXT_PUBLIC_MANAGER_DEFAULT_AVATAR) {
+      return process.env.NEXT_PUBLIC_MANAGER_DEFAULT_AVATAR;
+    }
+
+    return null; 
+  };
+
+  const avatarSrc = getAvatarUrl();
+
   const getProfileRoute = () => {
     switch (user.role.toLowerCase()) {
       case "admin":
@@ -37,6 +55,8 @@ const Profile: React.FC<ProfileProps> = ({ user, logout }) => {
         return "/dashboard/panel/teacher/profile";
       case "student":
         return "/dashboard/panel/student/profile";
+      case "management":
+        return "/dashboard/panel/manager/profile";
       default:
         return "/dashboard/profile";
     }
@@ -50,37 +70,21 @@ const Profile: React.FC<ProfileProps> = ({ user, logout }) => {
           onClick={() => setIsMenuOpen(!isMenuOpen)}
           className="flex items-center gap-2 md:gap-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
         >
-          <div className="relative w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center overflow-hidden">
-            {(() => {
-              const DEFAULT_ADMIN_AVATAR =
-                process.env.NEXT_PUBLIC_ADMIN_DEFAULT_AVATAR;
-              const shouldUseDefaultAdminAvatar =
-                user.role.toLowerCase() === "admin" &&
-                DEFAULT_ADMIN_AVATAR &&
-                !user.avatar;
-
-              if (shouldUseDefaultAdminAvatar || user.avatar) {
-                return (
-                  <Image
-                    src={
-                      shouldUseDefaultAdminAvatar
-                        ? DEFAULT_ADMIN_AVATAR
-                        : user.avatar!
-                    }
-                    alt={user.name}
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                );
-              }
-
-              return (
-                <span className="text-white font-semibold text-lg">
-                  {user.name.charAt(0).toUpperCase()}
-                </span>
-              );
-            })()}
+         <div className="relative w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full overflow-hidden flex items-center justify-center">
+            {avatarSrc ? (
+              <Image
+                src={avatarSrc}
+                alt={user.name}
+                width={40}
+                height={40}
+                className="object-cover w-full h-full"
+                unoptimized
+              />
+            ) : (
+              <span className="text-white font-bold text-lg">
+                {user.name.charAt(0).toUpperCase()}
+              </span>
+            )}
           </div>
           <div className="hidden md:block text-right">
             <p className="text-sm font-medium text-gray-900">{user.name}</p>

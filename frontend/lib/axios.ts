@@ -47,6 +47,17 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Check if error is user_deleted - clear everything and redirect
+    if (error.response?.data?.error === 'user_deleted') {
+      clearAccessToken();
+      // Clear refresh token cookie
+      document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/login';
+      }
+      return Promise.reject(error);
+    }
+
     // Jangan retry jika sedang refresh atau login
     if (
       originalRequest.url?.includes('/auth/refresh-token') ||
@@ -56,24 +67,26 @@ api.interceptors.response.use(
     }
 
     // Coba refresh token saat 401
-   if (error.response?.status === 401 && !originalRequest._retry) {
-  originalRequest._retry = true;
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
 
-  try {
-    const res = await api.post('/auth/refresh-token');
-    const newToken = res.data.access_token;
-    setAccessToken(newToken); // SIMPAN KE MEMORY
-    originalRequest.headers.Authorization = `Bearer ${newToken}`;
-    return api(originalRequest); // RETRY
-  } catch (refreshError) {
-    clearAccessToken();
-    // BARU DI SINI REDIRECT
-    if (typeof window !== 'undefined') {
-      window.location.href = '/auth/login';
+      try {
+        const res = await api.post('/auth/refresh-token');
+        const newToken = res.data.access_token;
+        setAccessToken(newToken); // SIMPAN KE MEMORY
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest); // RETRY
+      } catch (refreshError) {
+        clearAccessToken();
+        // Clear refresh token cookie
+        document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+        // BARU DI SINI REDIRECT
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/login';
+        }
+        return Promise.reject(refreshError);
+      }
     }
-    return Promise.reject(refreshError);
-  }
-}
 
     return Promise.reject(error);
   }

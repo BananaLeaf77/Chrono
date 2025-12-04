@@ -8,6 +8,7 @@ import Sidebar from "./components/Sidebar";
 import Profile from "./components/Profile";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth";
+import { Maname } from "next/font/google";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -32,13 +33,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   // === OPTIMIZED ROLE-BASED ACCESS CONTROL ===
   const checkRoleAccess = useCallback(
     (
-      userRole: "admin" | "teacher" | "student",
+      userRole: "admin" | "teacher" | "student" | "management",
       currentPath: string
     ): boolean => {
       const rolePaths = {
         admin: "/dashboard/panel/admin",
         teacher: "/dashboard/panel/teacher",
         student: "/dashboard/panel/student",
+        management: "/dashboard/panel/manager",
       };
 
       const allowedPath = rolePaths[userRole];
@@ -66,6 +68,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           admin: "/dashboard/panel/admin",
           teacher: "/dashboard/panel/teacher",
           student: "/dashboard/panel/student",
+          management: "/dashboard/panel/manager",
         };
         router.replace(rolePaths[user.role]);
         return;
@@ -211,7 +214,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           </div>
           <Profile user={user} logout={logout} />
         </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   );

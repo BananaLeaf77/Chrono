@@ -27,6 +27,8 @@ interface AuthResponse {
   role?: string;
   data?: User;
   access_token?: string;
+  error?: string;
+  message?: string;
 }
 
 interface AuthContextType {
@@ -52,8 +54,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       // Try to refresh token first
       const refreshResponse = await api
         .post<AuthResponse>("/auth/refresh-token")
-        .catch((error: AxiosError) => {
+        .catch((error: AxiosError<AuthResponse>) => {
           console.log("Token refresh failed:", error.message);
+          // Check if user was deleted
+          if (error.response?.data?.error === "user_deleted") {
+            document.cookie =
+              "refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+          }
           return null;
         });
 
@@ -77,7 +84,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     } catch (error: unknown) {
       let message = "Sesi berakhir";
       if (error instanceof AxiosError) {
-        message = error.response?.data?.message || "Sesi berakhir";
+        // Check if user was deleted
+        const errorData = error.response?.data as AuthResponse | undefined;
+        if (errorData?.error === "user_deleted") {
+          message = "Akun telah dihapus";
+          document.cookie =
+            "refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+        } else {
+          message = errorData?.message || "Sesi berakhir";
+        }
       } else if (error instanceof Error) {
         message = error.message;
       }
