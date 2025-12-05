@@ -155,7 +155,7 @@ func (h *StudentHandler) BookClass(c *gin.Context) {
 		return
 	}
 
-	err := h.studUC.BookClass(c.Request.Context(), userUUID.(string), payload.ScheduleID)
+	err := h.studUC.BookClass(c.Request.Context(), userUUID.(string), payload.ScheduleID, payload.PackageID)
 	if err != nil {
 		utils.PrintLogInfo(&name, 500, "BookClass", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{

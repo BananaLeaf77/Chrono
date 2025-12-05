@@ -156,7 +156,7 @@ func (r *studentRepository) CancelBookedClass(
 	return nil
 }
 
-func (r *studentRepository) BookClass(ctx context.Context, studentUUID string, scheduleID int) error {
+func (r *studentRepository) BookClass(ctx context.Context, studentUUID string, scheduleID int, packageID int) error {
 	tx := r.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -250,13 +250,14 @@ func (r *studentRepository) BookClass(ctx context.Context, studentUUID string, s
 		return errors.New("tidak ada paket yang sesuai dengan instrumen yang diajarkan guru ini")
 	}
 
-	// 8️⃣ Create booking
+	// 8️⃣ Create booking WITH STUDENT_PACKAGE_ID ✅
 	newBooking := domain.Booking{
-		StudentUUID: studentUUID,
-		ScheduleID:  schedule.ID,
-		ClassDate:   classDate,
-		Status:      domain.StatusBooked,
-		BookedAt:    time.Now(),
+		StudentUUID:      studentUUID,
+		ScheduleID:       schedule.ID,
+		StudentPackageID: selectedPackage.ID, // ✅ LINK TO SPECIFIC PACKAGE
+		ClassDate:        classDate,
+		Status:           domain.StatusBooked,
+		BookedAt:         time.Now(),
 	}
 	if err := tx.Create(&newBooking).Error; err != nil {
 		tx.Rollback()
@@ -271,9 +272,9 @@ func (r *studentRepository) BookClass(ctx context.Context, studentUUID string, s
 		return fmt.Errorf("gagal memperbarui status jadwal: %w", err)
 	}
 
-	// 🔟 Reduce quota
+	// 🔟 Reduce quota FROM SPECIFIC PACKAGE ✅
 	if err := tx.Model(&domain.StudentPackage{}).
-		Where("student_uuid = ? AND package_id = ?", studentUUID, selectedPackage.PackageID).
+		Where("id = ?", selectedPackage.ID). // ✅ USE SPECIFIC PACKAGE ID
 		UpdateColumn("remaining_quota", gorm.Expr("remaining_quota - ?", 1)).
 		Error; err != nil {
 		tx.Rollback()

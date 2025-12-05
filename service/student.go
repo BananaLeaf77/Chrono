@@ -21,8 +21,8 @@ func (s *studentUseCase) CancelBookedClass(ctx context.Context, bookingID int, s
 	return s.repo.CancelBookedClass(ctx, bookingID, studentUUID, reason)
 }
 
-func (s *studentUseCase) BookClass(ctx context.Context, studentUUID string, scheduleID int) error {
-	return s.repo.BookClass(ctx, studentUUID, scheduleID)
+func (s *studentUseCase) BookClass(ctx context.Context, studentUUID string, scheduleID int, packageID int) error {
+	return s.repo.BookClass(ctx, studentUUID, scheduleID, packageID)
 }
 
 func (s *studentUseCase) GetMyProfile(ctx context.Context, userUUID string) (*domain.User, error) {
