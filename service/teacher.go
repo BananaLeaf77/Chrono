@@ -13,6 +13,10 @@ func NewTeacherService(TeacherRepo domain.TeacherRepository) domain.TeacherUseCa
 	return &teacherService{repo: TeacherRepo}
 }
 
+func (s *teacherService) GetMyClassHistory(ctx context.Context, teacherUUID string) (*[]domain.ClassHistory, error) {
+	return s.repo.GetMyClassHistory(ctx, teacherUUID)
+}
+
 func (s *teacherService) FinishClass(ctx context.Context, bookingID int, teacherUUID string, payload domain.ClassHistory) error {
 	return s.repo.FinishClass(ctx, bookingID, teacherUUID, payload)
 }

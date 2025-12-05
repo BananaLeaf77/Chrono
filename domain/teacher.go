@@ -14,6 +14,7 @@ type TeacherUseCase interface {
 	GetAllBookedClass(ctx context.Context, uuid string) (*[]Booking, error)
 	CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string) error
 	FinishClass(ctx context.Context, bookingID int, teacherUUID string, payload ClassHistory) error
+	GetMyClassHistory(ctx context.Context, teacherUUID string) (*[]ClassHistory, error)
 }
 
 type TeacherRepository interface {
@@ -26,4 +27,5 @@ type TeacherRepository interface {
 	GetAllBookedClass(ctx context.Context, uuid string) (*[]Booking, error)
 	CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string) error
 	FinishClass(ctx context.Context, bookingID int, teacherUUID string, payload ClassHistory) error
+	GetMyClassHistory(ctx context.Context, teacherUUID string) (*[]ClassHistory, error)
 }

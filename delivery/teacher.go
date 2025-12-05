@@ -33,10 +33,42 @@ func NewTeacherHandler(app *gin.Engine, tc domain.TeacherUseCase, jwtManager *ut
 		teacher.POST("/create-available-class", h.AddAvailability)
 		teacher.DELETE("/delete-available-class/:id", h.DeleteAddAvailability)
 		teacher.GET("/booked", h.GetAllBookedClass)
+		teacher.GET("/class-history", h.GetMyClassHistory)
 		teacher.PUT("/cancel-booked-class/:id", h.CancelBookedClass)
 		teacher.PUT("/finish-class/:id", h.FinishClass)
 
 	}
+}
+
+func (h *TeacherHandler) GetMyClassHistory(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		utils.PrintLogInfo(&name, http.StatusUnauthorized, "GetMyClassHistory", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to finish class",
+		})
+		return
+	}
+
+	teacherUUID := userUUID.(string)
+	data, err := h.tc.GetMyClassHistory(c.Request.Context(), teacherUUID)
+	if err != nil {
+		utils.PrintLogInfo(&name, http.StatusInternalServerError, "GetMyClassHistory", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to get class history",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    data,
+	})
 }
 
 func (h *TeacherHandler) FinishClass(c *gin.Context) {

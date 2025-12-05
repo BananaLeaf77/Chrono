@@ -94,41 +94,34 @@ type TeacherSchedule struct {
 }
 
 type Booking struct {
-	ID            int        `gorm:"primaryKey" json:"id"`
-	StudentUUID   string     `gorm:"type:uuid;not null" json:"student_uuid"`
-	ScheduleID    int        `gorm:"not null" json:"schedule_id"`
-	ClassDate     time.Time  `gorm:"not null" json:"class_date"` // ✅ Add this field
-	Status        string     `gorm:"size:20;default:'booked'" json:"status"`
-	BookedAt      time.Time  `gorm:"autoCreateTime" json:"booked_at"`
-	CompletedAt   *time.Time `json:"completed_at,omitempty"`
-	RescheduledAt *time.Time `json:"rescheduled_at,omitempty"`
-	CancelledAt   *time.Time `json:"cancelled_at,omitempty"`
-	CanceledBy    *string    `gorm:"type:uuid" json:"canceled_by,omitempty"`
-	CancelUser    *User      `gorm:"foreignKey:CanceledBy;references:UUID" json:"cancel_user,omitempty"`
-	Notes         *string    `json:"notes,omitempty"`
+	ID               int        `gorm:"primaryKey" json:"id"`
+	StudentUUID      string     `gorm:"type:uuid;not null" json:"student_uuid"`
+	ScheduleID       int        `gorm:"not null" json:"schedule_id"`
+	StudentPackageID int        `gorm:"not null" json:"student_package_id"` // ✅ Added this field
+	ClassDate        time.Time  `gorm:"not null" json:"class_date"`         // ✅ Add this field
+	Status           string     `gorm:"size:20;default:'booked'" json:"status"`
+	BookedAt         time.Time  `gorm:"autoCreateTime" json:"booked_at"`
+	CompletedAt      *time.Time `json:"completed_at,omitempty"`
+	RescheduledAt    *time.Time `json:"rescheduled_at,omitempty"`
+	CancelledAt      *time.Time `json:"cancelled_at,omitempty"`
+	CanceledBy       *string    `gorm:"type:uuid" json:"canceled_by,omitempty"`
+	CancelUser       *User      `gorm:"foreignKey:CanceledBy;references:UUID" json:"cancel_user,omitempty"`
+	Notes            *string    `json:"notes,omitempty"`
 
-	Schedule TeacherSchedule `gorm:"foreignKey:ScheduleID" json:"schedule"`
-	Student  User            `gorm:"foreignKey:StudentUUID;references:UUID" json:"student"`
+	Schedule       TeacherSchedule `gorm:"foreignKey:ScheduleID" json:"schedule"`
+	Student        User            `gorm:"foreignKey:StudentUUID;references:UUID" json:"student"`
+	StudentPackage StudentPackage  `gorm:"foreignKey:StudentPackageID" json:"student_package"` // ✅ Added relationship
 
 	IsReadyToFinish bool `gorm:"-" json:"is_ready_to_finish"`
 }
 
 type ClassHistory struct {
-	ID          int       `gorm:"primaryKey" json:"id"`
-	BookingID   int       `gorm:"not null;unique" json:"booking_id"`
-	Booking     Booking   `gorm:"foreignKey:BookingID;constraint:OnDelete:CASCADE;" json:"booking"`
-	TeacherUUID string    `gorm:"type:uuid;not null" json:"teacher_uuid"`
-	StudentUUID string    `gorm:"type:uuid;not null" json:"student_uuid"`
-	PackageID   *int      `json:"package_id,omitempty"`
-	Status      string    `gorm:"size:20;default:'completed'" json:"status"`
-	Date        time.Time `gorm:"not null" json:"date"`
-	StartTime   time.Time `gorm:"not null" json:"start_time"`
-	EndTime     time.Time `gorm:"not null" json:"end_time"`
-	Notes       *string   `json:"notes,omitempty"`
+	ID        int     `gorm:"primaryKey" json:"id"`
+	BookingID int     `gorm:"not null;unique" json:"booking_id"`
+	Booking   Booking `gorm:"foreignKey:BookingID;constraint:OnDelete:CASCADE;" json:"booking"`
+	Status    string  `gorm:"size:20;default:'completed'" json:"status"`
+	Notes     *string `json:"notes,omitempty"`
 
-	Package        *Package             `gorm:"foreignKey:PackageID" json:"package,omitempty"`
-	Teacher        User                 `gorm:"foreignKey:TeacherUUID" json:"teacher"`
-	Student        User                 `gorm:"foreignKey:StudentUUID" json:"student"`
 	Documentations []ClassDocumentation `gorm:"foreignKey:ClassHistoryID" json:"documentations"`
 	CreatedAt      time.Time            `gorm:"autoCreateTime" json:"created_at"`
 }

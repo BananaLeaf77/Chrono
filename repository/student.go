@@ -122,14 +122,9 @@ func (r *studentRepository) CancelBookedClass(
 
 		// Insert new cancel history
 		newHistory := domain.ClassHistory{
-			BookingID:   booking.ID,
-			TeacherUUID: booking.Schedule.TeacherUUID,
-			StudentUUID: booking.StudentUUID,
-			Status:      domain.StatusCancelled,
-			Date:        booking.ClassDate,
-			StartTime:   booking.Schedule.StartTime,
-			EndTime:     booking.Schedule.EndTime,
-			Notes:       reason,
+			BookingID: booking.ID,
+			Status:    domain.StatusCancelled,
+			Notes:     reason,
 		}
 
 		if err := tx.Create(&newHistory).Error; err != nil {

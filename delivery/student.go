@@ -18,11 +18,12 @@ type StudentHandler struct {
 
 func NewStudentHandler(r *gin.Engine, studUC domain.StudentUseCase, jwtManager *utils.JWTManager) {
 	handler := &StudentHandler{studUC: studUC}
+	r.GET("/packages", handler.GetAllAvailablePackages)
 
 	student := r.Group("/student")
+
 	student.Use(config.AuthMiddleware(jwtManager), middleware.StudentAndAdminOnly())
 	{
-		student.GET("/packages", handler.GetAllAvailablePackages)
 		student.GET("/profile", handler.GetMyProfile)
 		student.POST("/book", handler.BookClass)
 		student.GET("/booked", handler.GetMyBookedClasses)
@@ -237,11 +238,10 @@ func (h *StudentHandler) GetMyBookedClasses(c *gin.Context) {
 }
 
 func (h *StudentHandler) GetAllAvailablePackages(c *gin.Context) {
-	name := utils.GetAPIHitter(c)
 
 	packages, err := h.studUC.GetAllAvailablePackages(c.Request.Context())
 	if err != nil {
-		utils.PrintLogInfo(&name, 500, "GetAllAvailablePackages", &err)
+		utils.PrintLogInfo(nil, 500, "GetAllAvailablePackages", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   err.Error(),
@@ -250,7 +250,7 @@ func (h *StudentHandler) GetAllAvailablePackages(c *gin.Context) {
 		return
 	}
 
-	utils.PrintLogInfo(&name, 200, "GetAllAvailablePackages", nil)
+	utils.PrintLogInfo(nil, 200, "GetAllAvailablePackages", nil)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    packages,

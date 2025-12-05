@@ -18,6 +18,29 @@ type teacherRepository struct {
 func NewTeacherRepository(db *gorm.DB) domain.TeacherRepository {
 	return &teacherRepository{db: db}
 }
+
+func (r *teacherRepository) GetMyClassHistory(ctx context.Context, teacherUUID string) (*[]domain.ClassHistory, error) {
+	var histories []domain.ClassHistory
+
+	err := r.db.WithContext(ctx).
+		Where("teacher_uuid = ?", teacherUUID).
+		Preload("Booking").
+		Preload("Booking.Schedule").
+		Preload("Booking.Schedule.Teacher").
+		Preload("Booking.Schedule.Student").
+		Preload("Booking.Schedule.TeacherProfile.Instruments").
+		Preload("Teacher").
+		Preload("Documentations").
+		Order("date DESC, start_time DESC").
+		Find(&histories).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch class history: %w", err)
+	}
+
+	return &histories, nil
+}
+
 func (r *teacherRepository) AddAvailability(ctx context.Context, schedules *[]domain.TeacherSchedule) error {
 	// ✅ Check for overlaps BEFORE inserting
 	for _, schedule := range *schedules {
@@ -90,40 +113,11 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		return errors.New("kelas belum selesai, tunggu hingga waktu berakhir")
 	}
 
-	// ✅ 4️⃣ Validate submitted date matches booking date
-	if !payload.Date.Equal(booking.ClassDate.Truncate(24 * time.Hour)) {
-		tx.Rollback()
-		return fmt.Errorf("tanggal yang dimasukkan (%s) tidak sesuai dengan tanggal booking (%s)",
-			payload.Date.Format("2006-01-02"),
-			booking.ClassDate.Format("2006-01-02"))
-	}
-
-	// ✅ 5️⃣ Validate submitted times match schedule times
-	if payload.StartTime.Hour() != booking.Schedule.StartTime.Hour() ||
-		payload.StartTime.Minute() != booking.Schedule.StartTime.Minute() {
-		tx.Rollback()
-		return fmt.Errorf("waktu mulai tidak sesuai dengan jadwal (harusnya %s)",
-			booking.Schedule.StartTime.Format("15:04"))
-	}
-
-	if payload.EndTime.Hour() != booking.Schedule.EndTime.Hour() ||
-		payload.EndTime.Minute() != booking.Schedule.EndTime.Minute() {
-		tx.Rollback()
-		return fmt.Errorf("waktu selesai tidak sesuai dengan jadwal (harusnya %s)",
-			booking.Schedule.EndTime.Format("15:04"))
-	}
-
 	// 6️⃣ Create ClassHistory
 	classHistory := domain.ClassHistory{
-		BookingID:   booking.ID,
-		TeacherUUID: booking.Schedule.TeacherUUID,
-		StudentUUID: booking.StudentUUID,
-		PackageID:   payload.PackageID,
-		Status:      domain.StatusCompleted,
-		Date:        booking.ClassDate,
-		StartTime:   booking.Schedule.StartTime,
-		EndTime:     booking.Schedule.EndTime,
-		Notes:       payload.Notes,
+		BookingID: booking.ID,
+		Status:    domain.StatusCompleted,
+		Notes:     payload.Notes,
 	}
 
 	if err := tx.Create(&classHistory).Error; err != nil {
@@ -428,14 +422,12 @@ func (r *teacherRepository) CancelBookedClass(ctx context.Context, bookingID int
 	// 🧾 Refund student’s quota (if linked to a package)
 	var classHistory domain.ClassHistory
 	if err := tx.Where("booking_id = ?", booking.ID).First(&classHistory).Error; err == nil {
-		if classHistory.PackageID != nil {
-			if err := tx.Model(&domain.StudentPackage{}).
-				Where("student_uuid = ? AND package_id = ?", booking.StudentUUID, *classHistory.PackageID).
-				UpdateColumn("remaining_quota", gorm.Expr("remaining_quota + ?", 1)).
-				Error; err != nil {
-				tx.Rollback()
-				return fmt.Errorf("gagal mengembalikan kuota paket: %w", err)
-			}
+		if err := tx.Model(&domain.StudentPackage{}).
+			Where("student_uuid = ?", booking.StudentUUID).
+			UpdateColumn("remaining_quota", gorm.Expr("remaining_quota + ?", 1)).
+			Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal mengembalikan kuota paket: %w", err)
 		}
 	}
 

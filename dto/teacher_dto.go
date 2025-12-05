@@ -86,12 +86,6 @@ type FinishClassRequest struct {
 
 // ✅ Update mapper to handle string time conversion
 func MapFinishClassRequestToClassHistory(req *FinishClassRequest, bookingID int, teacherUUID string) (domain.ClassHistory, error) {
-	// Parse date
-	parsedDate, err := time.Parse("2006-01-02", req.Date)
-	if err != nil {
-		return domain.ClassHistory{}, fmt.Errorf("invalid date format, use YYYY-MM-DD: %w", err)
-	}
-
 	// Parse start time
 	startTime, err := time.Parse("15:04", req.StartTime)
 	if err != nil {
@@ -110,14 +104,9 @@ func MapFinishClassRequestToClassHistory(req *FinishClassRequest, bookingID int,
 	}
 
 	history := domain.ClassHistory{
-		BookingID:   bookingID,
-		TeacherUUID: teacherUUID,
-		PackageID:   req.PackageID,
-		Date:        parsedDate,
-		StartTime:   startTime,
-		EndTime:     endTime,
-		Notes:       &req.Notes,
-		Status:      domain.StatusCompleted,
+		BookingID: bookingID,
+		Notes:     &req.Notes,
+		Status:    domain.StatusCompleted,
 	}
 
 	// Add documentation URLs if provided
