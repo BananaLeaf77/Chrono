@@ -130,8 +130,7 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 
 	if is30MinPackage {
 		// 30-min package: can finish after half time
-		halfwayPoint := classStart.Add(endTime.Sub(startTime) / 2)
-		canFinish = now.After(halfwayPoint)
+		canFinish = now.After(classStart)
 	} else {
 		// 60-min package: must wait until class ends
 		canFinish = now.After(classEnd)
