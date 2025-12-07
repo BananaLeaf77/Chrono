@@ -710,7 +710,6 @@ func (r *adminRepo) UpdateTeacher(ctx context.Context, user *domain.User, instru
 func (r *adminRepo) GetAllTeachers(ctx context.Context) ([]domain.User, error) {
 	var teachers []domain.User
 	if err := r.db.WithContext(ctx).
-		Preload("TeacherProfile.Instruments").
 		Where("role = ? AND deleted_at IS NULL", domain.RoleTeacher).
 		Find(&teachers).Error; err != nil {
 		return nil, errors.New(utils.TranslateDBError(err))
