@@ -297,7 +297,7 @@ export default function ChangePasswordModal({
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting || !newPwdValid}
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 active:scale-95"
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 transition-all active:scale-95"
             >
               {isSubmitting ? (
                 <span className="flex items-center justify-center gap-2">

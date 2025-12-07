@@ -50,6 +50,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         return false; // Perlu redirect
       }
 
+      // Exception: Allow all roles to access /dashboard/panel/setting
+      if (currentPath === "/dashboard/panel/setting") {
+        return true;
+      }
+
       // Cek apakah path saat ini sesuai dengan role
       return currentPath.startsWith(allowedPath);
     },
@@ -127,7 +132,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           ${isCollapsed ? "w-20" : "w-64"}
           ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 bg-white border-r border-gray-200 
-          transition-all duration-300 flex flex-col
+          transition-all duration-300 flex flex-col 
         `}
       >
         <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200">

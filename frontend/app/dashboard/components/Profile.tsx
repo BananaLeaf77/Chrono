@@ -34,6 +34,10 @@ const Profile: React.FC<ProfileProps> = ({ user, logout }) => {
 
     const role = user.role.toLowerCase();
 
+    if (role === "teacher" && process.env.NEXT_PUBLIC_DEFAULT_AVATAR) {
+      return process.env.NEXT_PUBLIC_DEFAULT_AVATAR;
+    }
+
     if (role === "admin" && process.env.NEXT_PUBLIC_ADMIN_DEFAULT_AVATAR) {
       return process.env.NEXT_PUBLIC_ADMIN_DEFAULT_AVATAR;
     }

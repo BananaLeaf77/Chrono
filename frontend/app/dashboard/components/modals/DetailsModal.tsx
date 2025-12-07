@@ -493,7 +493,7 @@ export function ManagerDetailModal({
       <div className="bg-white rounded-xl sm:rounded-2xl w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto shadow-xl">
         {/* Modal Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center z-10">
-          <h2 className="text-lg sm:text-2xl font-bold text-gray-900">Detail Teacher</h2>
+          <h2 className="text-lg sm:text-2xl font-bold text-gray-900">Detail Manager</h2>
           <button
             onClick={onClose}
             className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition"
@@ -508,9 +508,9 @@ export function ManagerDetailModal({
           <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl sm:rounded-2xl p-4">
             <div className="flex flex-col items-center text-center gap-3">
               <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg flex-shrink-0">
-                {managerDetail.image || process.env.NEXT_PUBLIC_DEFAULT_AVATAR ? (
+                {managerDetail.image || process.env.NEXT_PUBLIC_MANAGER_DEFAULT_AVATAR ? (
                   <Image
-                    src={managerDetail.image || process.env.NEXT_PUBLIC_DEFAULT_AVATAR || ''}
+                    src={managerDetail.image || process.env.NEXT_PUBLIC_MANAGER_DEFAULT_AVATAR || ''}
                     alt={managerDetail.name}
                     width={96}
                     height={96}

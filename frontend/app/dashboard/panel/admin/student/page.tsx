@@ -282,6 +282,8 @@ export default function StudentPage() {
 
   // useEffect
   useEffect(() => {
+    const id = Math.random().toString(36).substring(7);
+  console.log(`useEffect [${id}] fetchStudents dipanggil - ${new Date().toISOString()}`);
     fetchStudents();
     fetchPackages();
   }, []);
@@ -304,8 +306,6 @@ export default function StudentPage() {
         setSuccessMessage(null);
       }, 3000);
 
-      // Refresh the student list
-      await fetchStudents();
 
       // Refresh student detail if detail modal is open
       if (selectedStudent?.uuid) {

@@ -89,7 +89,7 @@ const menuItems = {
 };
 
 interface SidebarProps {
-  role: "admin" | "teacher" | "student";
+  role: "admin" | "teacher" | "student" | "management";
   isCollapsed: boolean;
   toggleSidebar: () => void;
 }
@@ -140,7 +140,7 @@ const Sidebar: React.FC<SidebarProps> = ({ role, isCollapsed }) => {
       {/* Bottom Items */}
       <div className="px-3 py-4 border-t border-gray-200 space-y-1">
         <Link
-          href="/settings"
+          href="/dashboard/panel/setting"
           className={`
             flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
             text-gray-700 hover:bg-gray-100 

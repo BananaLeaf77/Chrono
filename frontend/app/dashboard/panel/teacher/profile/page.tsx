@@ -44,6 +44,7 @@ export default function TeacherProfilePage() {
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -294,7 +295,7 @@ export default function TeacherProfilePage() {
                 <div className="absolute inset-0 bg-black/5"></div>
                 <div className="relative text-center">
                   <div className="relative w-28 h-28 mx-auto rounded-full ring-4 ring-white shadow-xl overflow-hidden bg-white/20 backdrop-blur-sm">
-                    {profile.image ? (
+                    {profile.image && !imageError ? (
                       <Image
                         src={profile.image}
                         alt={profile.name}
@@ -303,10 +304,23 @@ export default function TeacherProfilePage() {
                         className="rounded-full object-cover"
                         unoptimized
                         priority
+                        onError={() => setImageError(true)}
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-300 to-indigo-400">
-                        <User className="w-14 h-14 text-white" />
+                      <div className="w-full h-full flex items-center justify-center bg-slate-100">
+                        {process.env.NEXT_PUBLIC_DEFAULT_AVATAR ? (
+                          <Image
+                            src={process.env.NEXT_PUBLIC_DEFAULT_AVATAR}
+                            alt="Default Avatar"
+                            fill
+                            sizes="112px"
+                            className="rounded-full object-cover"
+                            unoptimized
+                            priority
+                          />
+                        ) : (
+                          <User className="w-12 h-12 text-slate-400" />
+                        )}
                       </div>
                     )}
                   </div>
