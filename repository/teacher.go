@@ -80,9 +80,10 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		}
 	}()
 
-	// 1️⃣ Get booking
+	// 1️⃣ Get booking with package info
 	var booking domain.Booking
 	err := tx.Preload("Schedule").
+		Preload("StudentPackage.Package"). // Add this to check package duration
 		Where("id = ? AND status = ?", bookingID, domain.StatusBooked).
 		First(&booking).Error
 	if err != nil {
@@ -99,19 +100,55 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		return errors.New("anda tidak memiliki akses ke booking ini")
 	}
 
-	// 3️⃣ Verify class time has passed
-	classEndTime := time.Date(
-		booking.ClassDate.Year(),
-		booking.ClassDate.Month(),
-		booking.ClassDate.Day(),
-		booking.Schedule.EndTime.Hour(),
-		booking.Schedule.EndTime.Minute(),
-		0, 0, time.Local,
+	// 3️⃣ Calculate class end time correctly
+	startTime := booking.Schedule.StartTime
+	endTime := booking.Schedule.EndTime
+
+	classStart := time.Date(
+		booking.ClassDate.Year(), booking.ClassDate.Month(), booking.ClassDate.Day(),
+		startTime.Hour(), startTime.Minute(), startTime.Second(), 0,
+		booking.ClassDate.Location(), // Use class date's location
 	)
 
-	if time.Now().Before(classEndTime) {
+	classEnd := time.Date(
+		booking.ClassDate.Year(), booking.ClassDate.Month(), booking.ClassDate.Day(),
+		endTime.Hour(), endTime.Minute(), endTime.Second(), 0,
+		booking.ClassDate.Location(),
+	)
+
+	now := time.Now().In(classEnd.Location())
+
+	// 4️⃣ Check if class can be finished
+	// For 30-minute packages, can finish after 15 minutes
+	// For 60-minute packages, must wait until class ends
+	canFinish := false
+	is30MinPackage := false
+
+	if booking.StudentPackage.Package != nil {
+		is30MinPackage = booking.StudentPackage.Package.Duration == 30
+	}
+
+	if is30MinPackage {
+		// 30-min package: can finish after half time
+		halfwayPoint := classStart.Add(endTime.Sub(startTime) / 2)
+		canFinish = now.After(halfwayPoint)
+	} else {
+		// 60-min package: must wait until class ends
+		canFinish = now.After(classEnd)
+	}
+
+	if !canFinish {
 		tx.Rollback()
+		if is30MinPackage {
+			return errors.New("kelas 30 menit belum mencapai waktu setengah (15 menit)")
+		}
 		return errors.New("kelas belum selesai, tunggu hingga waktu berakhir")
+	}
+
+	// 5️⃣ Check if class hasn't started yet (edge case)
+	if now.Before(classStart) {
+		tx.Rollback()
+		return errors.New("kelas belum dimulai")
 	}
 
 	// 6️⃣ Create ClassHistory
@@ -137,9 +174,8 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 
 	// 8️⃣ Update booking status
 	completedAt := time.Now()
-	if err := tx.Model(&domain.Booking{}).
-		Where("id = ?", booking.ID).
-		Updates(map[string]interface{}{
+	if err := tx.Model(&booking).
+		UpdateColumns(map[string]interface{}{
 			"status":       domain.StatusCompleted,
 			"completed_at": completedAt,
 		}).Error; err != nil {
@@ -148,11 +184,21 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 	}
 
 	// 9️⃣ Mark schedule as available again
+	// Only if this was a one-time booking, not recurring
+	// If recurring schedule, you might NOT want to free it
 	if err := tx.Model(&domain.TeacherSchedule{}).
 		Where("id = ?", booking.ScheduleID).
 		Update("is_booked", false).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("gagal memperbarui jadwal: %w", err)
+	}
+
+	// 🔟 Reduce student package quota by 1
+	if err := tx.Model(&domain.StudentPackage{}).
+		Where("id = ?", booking.StudentPackageID).
+		Update("remaining_quota", gorm.Expr("remaining_quota - 1")).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal mengurangi quota package: %w", err)
 	}
 
 	// ✅ Commit
@@ -162,30 +208,6 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 
 	return nil
 }
-
-// func (r *teacherRepository) AddAvailability(ctx context.Context, schedule *domain.TeacherSchedule) error {
-// 	var count int64
-// 	err := r.db.WithContext(ctx).
-// 		Model(&domain.TeacherSchedule{}).
-// 		Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL", schedule.TeacherUUID, schedule.DayOfWeek).
-// 		Where(`
-// 			(start_time, end_time) OVERLAPS (?, ?)
-// 		`, schedule.StartTime, schedule.EndTime).
-// 		Count(&count).Error
-// 	if err != nil {
-// 		return fmt.Errorf("failed to check overlap: %w", err)
-// 	}
-// 	if count > 0 {
-// 		return errors.New("slot waktu konflik mohon check kembali waktu anda")
-// 	}
-
-// 	// If no conflicts, proceed
-// 	if err := r.db.WithContext(ctx).Create(schedule).Error; err != nil {
-// 		return fmt.Errorf("failed to add schedule: %w", err)
-// 	}
-
-// 	return nil
-// }
 
 func (r *teacherRepository) GetMyProfile(ctx context.Context, userUUID string) (*domain.User, error) {
 	var teacher domain.User
