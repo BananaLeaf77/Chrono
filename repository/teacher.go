@@ -213,14 +213,6 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		}
 	}
 
-	// 🔟 Reduce student package quota by 1
-	if err := tx.Model(&domain.StudentPackage{}).
-		Where("id = ?", booking.StudentPackageID).
-		Update("remaining_quota", gorm.Expr("remaining_quota - 1")).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("gagal mengurangi quota package: %w", err)
-	}
-
 	// ✅ Commit
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("gagal menyimpan transaksi: %w", err)
