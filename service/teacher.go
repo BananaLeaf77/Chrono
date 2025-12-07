@@ -21,8 +21,8 @@ func (s *teacherService) FinishClass(ctx context.Context, bookingID int, teacher
 	return s.repo.FinishClass(ctx, bookingID, teacherUUID, payload)
 }
 
-func (s *teacherService) CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string) error {
-	return s.repo.CancelBookedClass(ctx, bookingID, teacherUUID)
+func (s *teacherService) CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string, reason *string) error {
+	return s.repo.CancelBookedClass(ctx, bookingID, teacherUUID, reason)
 }
 
 func (s *teacherService) GetAllBookedClass(ctx context.Context, teacherUUID string) (*[]domain.Booking, error) {

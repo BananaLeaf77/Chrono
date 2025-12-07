@@ -42,6 +42,7 @@ type Package struct {
 	ID           int        `gorm:"primaryKey" json:"id"`
 	Name         string     `gorm:"not null" json:"name"`
 	Quota        int        `gorm:"not null" json:"quota"`
+	Duration     int        `gorm:"not null;default:30" json:"duration"` // Minutes: 30 or 60
 	Description  string     `json:"description"`
 	InstrumentID int        `gorm:"not null" json:"instrument_id"`
 	Instrument   Instrument `gorm:"foreignKey:InstrumentID" json:"instrument"`

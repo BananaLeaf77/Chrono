@@ -17,6 +17,12 @@ type AuthHandler struct {
 
 func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase) {
 	handler := &AuthHandler{authUC: authUC}
+	// Ping Route
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "pong",
+		})
+	})
 
 	// Public routes
 	public := r.Group("/auth")

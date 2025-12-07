@@ -69,12 +69,14 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 
 type CreatePackageRequest struct {
 	Name         string  `json:"name" binding:"required,min=3,max=50"`
+	Duration     int     `json:"duration" binding:"required,oneof=30 60"`
 	Quota        int     `json:"quota" binding:"required,gt=0"`
 	Description  *string `json:"description,omitempty"`
 	InstrumentID int     `json:"instrument_id" binding:"required,gt=0"`
 }
 type UpdatePackageRequest struct {
 	Name         *string `json:"name,omitempty" binding:"omitempty,min=3,max=50"`
+	Duration     int     `json:"duration" binding:"required,oneof=30 60"`
 	Quota        *int    `json:"quota,omitempty" binding:"omitempty,gt=0"`
 	Description  *string `json:"description,omitempty"`
 	InstrumentID *int    `json:"instrument_id,omitempty" binding:"required,gt=0"`
@@ -141,6 +143,7 @@ func (h *AdminHandler) CreatePackage(c *gin.Context) {
 	pkg := &domain.Package{
 		Name:         req.Name,
 		Quota:        req.Quota,
+		Duration:     req.Duration,
 		Description:  *req.Description,
 		InstrumentID: req.InstrumentID,
 	}
@@ -181,6 +184,12 @@ func (h *AdminHandler) UpdatePackage(c *gin.Context) {
 		pkg.Quota = *req.Quota
 	}
 
+	if req.Duration != 30 && req.Duration != 60 {
+		utils.PrintLogInfo(&name, 400, "UpdatePackage - Minute Payload Failure", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to update package", "success": false, "error": "Durasi paket hanya bisa 30 atau 60 menit"})
+		return
+	}
+	pkg.Duration = req.Duration
 	pkg.InstrumentID = *req.InstrumentID
 	pkg.Description = *req.Description
 
