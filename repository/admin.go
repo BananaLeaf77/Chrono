@@ -421,8 +421,6 @@ func (r *adminRepo) GetAllUsers(ctx context.Context) ([]domain.User, error) {
 func (r *adminRepo) GetAllStudents(ctx context.Context) ([]domain.User, error) {
 	var students []domain.User
 	err := r.db.WithContext(ctx).
-		Preload("StudentProfile.Packages", "end_date >= ?", time.Now()).
-		Preload("StudentProfile.Packages.Package.Instrument").
 		Where("role = ? AND deleted_at IS NULL", domain.RoleStudent).
 		Find(&students).Error
 
