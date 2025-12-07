@@ -83,7 +83,7 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 	// 1️⃣ Get booking with package info
 	var booking domain.Booking
 	err := tx.Preload("Schedule").
-		Preload("StudentPackage.Package"). // Add this to check package duration
+		Preload("StudentPackage.Package").
 		Where("id = ? AND status = ?", bookingID, domain.StatusBooked).
 		First(&booking).Error
 	if err != nil {
@@ -100,28 +100,18 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		return errors.New("anda tidak memiliki akses ke booking ini")
 	}
 
-	// 3️⃣ Calculate class end time correctly
+	// 3️⃣ Calculate class times based on package duration
 	startTime := booking.Schedule.StartTime
-	endTime := booking.Schedule.EndTime
+	scheduleEndTime := booking.Schedule.EndTime // This is always 1 hour later
 
 	classStart := time.Date(
 		booking.ClassDate.Year(), booking.ClassDate.Month(), booking.ClassDate.Day(),
 		startTime.Hour(), startTime.Minute(), startTime.Second(), 0,
-		booking.ClassDate.Location(), // Use class date's location
-	)
-
-	classEnd := time.Date(
-		booking.ClassDate.Year(), booking.ClassDate.Month(), booking.ClassDate.Day(),
-		endTime.Hour(), endTime.Minute(), endTime.Second(), 0,
 		booking.ClassDate.Location(),
 	)
 
-	now := time.Now().In(classEnd.Location())
-
-	// 4️⃣ Check if class can be finished
-	// For 30-minute packages, can finish after 15 minutes
-	// For 60-minute packages, must wait until class ends
-	canFinish := false
+	// Determine actual class end based on package duration
+	var classEnd time.Time
 	is30MinPackage := false
 
 	if booking.StudentPackage.Package != nil {
@@ -129,19 +119,30 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 	}
 
 	if is30MinPackage {
-		// 30-min package: can finish after half time
-		canFinish = now.After(classStart)
+		// 30-min package: class ends 30 minutes after start
+		classEnd = classStart.Add(30 * time.Minute)
 	} else {
-		// 60-min package: must wait until class ends
-		canFinish = now.After(classEnd)
+		// 60-min package: class ends at schedule end time
+		classEnd = time.Date(
+			booking.ClassDate.Year(), booking.ClassDate.Month(), booking.ClassDate.Day(),
+			scheduleEndTime.Hour(), scheduleEndTime.Minute(), scheduleEndTime.Second(), 0,
+			booking.ClassDate.Location(),
+		)
 	}
+
+	now := time.Now().In(classEnd.Location())
+
+	// 4️⃣ Check if class can be finished
+	canFinish := now.After(classEnd)
 
 	if !canFinish {
 		tx.Rollback()
+		remaining := classEnd.Sub(now).Round(time.Minute)
+
 		if is30MinPackage {
-			return errors.New("kelas 30 menit belum mencapai waktu setengah (15 menit)")
+			return fmt.Errorf("kelas 30 menit belum selesai. Tunggu %v menit lagi", remaining)
 		}
-		return errors.New("kelas belum selesai, tunggu hingga waktu berakhir")
+		return fmt.Errorf("kelas 60 menit belum selesai. Tunggu %v menit lagi", remaining)
 	}
 
 	// 5️⃣ Check if class hasn't started yet (edge case)
@@ -182,14 +183,34 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		return fmt.Errorf("gagal memperbarui status booking: %w", err)
 	}
 
-	// 9️⃣ Mark schedule as available again
-	// Only if this was a one-time booking, not recurring
-	// If recurring schedule, you might NOT want to free it
-	if err := tx.Model(&domain.TeacherSchedule{}).
-		Where("id = ?", booking.ScheduleID).
-		Update("is_booked", false).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("gagal memperbarui jadwal: %w", err)
+	// 9️⃣ IMPORTANT: Check if the other half of schedule is available
+	// If 30-min package used first half (13:00-13:30), second half (13:30-14:00) should be freed
+	if is30MinPackage {
+		// Check if there's another booking for the second half
+		var secondHalfBooking domain.Booking
+		err := tx.Where("schedule_id = ? AND class_date = ? AND status = ?",
+			booking.ScheduleID, booking.ClassDate, domain.StatusBooked).
+			Where("id != ?", booking.ID).
+			First(&secondHalfBooking).Error
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// No booking for second half, keep schedule available
+			// Do nothing - schedule already marked as available
+		} else if err == nil {
+			// There's a booking for second half, DON'T free the schedule
+			// Do nothing - keep schedule booked
+		} else {
+			tx.Rollback()
+			return fmt.Errorf("gagal memeriksa jadwal: %w", err)
+		}
+	} else {
+		// 60-min package used entire slot, free the schedule
+		if err := tx.Model(&domain.TeacherSchedule{}).
+			Where("id = ?", booking.ScheduleID).
+			Update("is_booked", false).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal memperbarui jadwal: %w", err)
+		}
 	}
 
 	// 🔟 Reduce student package quota by 1

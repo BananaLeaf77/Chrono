@@ -24,7 +24,6 @@ func InitMiddleware(app *gin.Engine) {
 	}))
 
 	// Logging & Recovery
-	app.Use(gin.Logger())
 	app.Use(gin.Recovery())
 
 	// Security Headers
