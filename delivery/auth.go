@@ -3,10 +3,12 @@ package delivery
 import (
 	"chronosphere/config"
 	"chronosphere/domain"
+	"chronosphere/middleware"
 	"chronosphere/utils"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,21 +17,40 @@ type AuthHandler struct {
 	authUC domain.AuthUseCase
 }
 
-func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase) {
+func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase, authLimiter middleware.RateLimiter) {
 	handler := &AuthHandler{authUC: authUC}
-	// Ping Route
+
+	// Ping Route (no rate limiting)
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "pong",
 		})
 	})
 
-	// Public routes
+	// Public routes with stricter rate limiting for auth
 	public := r.Group("/auth")
+	if authLimiter != nil {
+		authConfig := middleware.RateLimiterConfig{
+			RequestsPerWindow: 10,
+			WindowDuration:    1 * time.Minute,
+			KeyPrefix:         "ratelimit:auth",
+		}
+		public.Use(middleware.EndpointRateLimitMiddleware(authLimiter, authConfig, "auth"))
+	}
 	{
 		public.POST("/register", handler.Register)
 		public.POST("/verify-otp", handler.VerifyOTP)
-		public.POST("/login", handler.Login)
+		// Login configured with rate limiting
+		loginRateLimiter := r.Group("/auth")
+		if authLimiter != nil {
+			loginConfig := middleware.RateLimiterConfig{
+				RequestsPerWindow: 5,
+				WindowDuration:    5 * time.Minute,
+				KeyPrefix:         "ratelimit:login",
+			}
+			loginRateLimiter.Use(middleware.EndpointRateLimitMiddleware(authLimiter, loginConfig, "login"))
+		}
+		loginRateLimiter.POST("/login", handler.Login)
 		public.POST("/forgot-password", handler.ForgotPassword)
 		public.POST("/reset-password", handler.ResetPassword)
 		public.POST("/resend-otp", handler.ResendOTP)
@@ -37,7 +58,7 @@ func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase) {
 		public.POST("/logout", handler.Logout)
 	}
 
-	// Protected routes
+	// Protected routes (use global rate limiting)
 	protected := r.Group("/auth")
 	protected.Use(config.AuthMiddleware(handler.authUC.GetAccessTokenManager()))
 	{

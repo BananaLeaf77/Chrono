@@ -3,11 +3,14 @@ package main
 import (
 	"chronosphere/config"
 	"chronosphere/delivery"
+	"chronosphere/middleware"
 	"chronosphere/repository"
 	"chronosphere/service"
 	"chronosphere/utils"
 	"log"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -65,8 +68,68 @@ func main() {
 	app := gin.Default()
 	config.InitMiddleware(app)
 
-	// Init handlers (inject dependencies)s
-	delivery.NewAuthHandler(app, authService)
+	// ========================================================================
+	// RATE LIMITING SETUP
+	// ========================================================================
+	rateLimitEnabled := os.Getenv("RATE_LIMIT_ENABLED") == "true"
+
+	var globalLimiter middleware.RateLimiter
+	var authLimiter middleware.RateLimiter
+
+	if rateLimitEnabled {
+		// Parse configurations
+		globalRequests, _ := strconv.Atoi(os.Getenv("RATE_LIMIT_REQUESTS_PER_WINDOW"))
+		if globalRequests == 0 {
+			globalRequests = 100
+		}
+
+		globalWindow, _ := strconv.Atoi(os.Getenv("RATE_LIMIT_WINDOW_DURATION"))
+		if globalWindow == 0 {
+			globalWindow = 60
+		}
+
+		authRequests, _ := strconv.Atoi(os.Getenv("RATE_LIMIT_AUTH_REQUESTS"))
+		if authRequests == 0 {
+			authRequests = 10
+		}
+
+		authWindow, _ := strconv.Atoi(os.Getenv("RATE_LIMIT_AUTH_WINDOW"))
+		if authWindow == 0 {
+			authWindow = 60
+		}
+
+		// Global rate limiter configuration
+		globalConfig := middleware.RateLimiterConfig{
+			RequestsPerWindow: globalRequests,
+			WindowDuration:    time.Duration(globalWindow) * time.Second,
+			KeyPrefix:         "ratelimit:global",
+			SkipPaths:         []string{"/ping"},
+		}
+
+		// Try Redis first, fallback to in-memory
+		globalLimiter = middleware.NewRedisRateLimiter(redisAddr, globalConfig)
+
+		// Apply global rate limiting
+		app.Use(middleware.RateLimitMiddleware(globalLimiter, globalConfig))
+
+		// Auth-specific rate limiter (stricter)
+		authConfig := middleware.RateLimiterConfig{
+			RequestsPerWindow: authRequests,
+			WindowDuration:    time.Duration(authWindow) * time.Second,
+			KeyPrefix:         "ratelimit:auth",
+		}
+		authLimiter = middleware.NewRedisRateLimiter(redisAddr, authConfig)
+
+		log.Printf("✅ Rate limiting enabled (Global: %d req/%ds, Auth: %d req/%ds)",
+			globalRequests, globalWindow, authRequests, authWindow)
+	} else {
+		log.Println("⚠️  Rate limiting disabled")
+	}
+
+	// ========================================================================
+	// INIT HANDLERS
+	// ========================================================================
+	delivery.NewAuthHandler(app, authService, authLimiter)
 	delivery.NewManagerHandler(app, managementService, authService.GetAccessTokenManager())
 	delivery.NewStudentHandler(app, studentService, authService.GetAccessTokenManager())
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
