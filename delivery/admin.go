@@ -32,7 +32,7 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 
 		// Manager
 		admin.POST("/managers", h.CreateManager)
-		admin.PUT("/managers/modify/:uuid", h.UpdateManager)
+		// admin.PUT("/managers/modify/:uuid", h.UpdateManager)
 		admin.GET("/managers", h.GetAllManagers)
 		admin.GET("/managers/:uuid", h.GetManagerByUUID)
 
@@ -441,12 +441,12 @@ func (h *AdminHandler) GetManagerByUUID(c *gin.Context) {
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	uuid := c.Param("uuid")
 	if err := h.uc.DeleteUser(c.Request.Context(), uuid); err != nil {
-		utils.PrintLogInfo(&uuid, 500, "DeleteUser - UseCase", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		utils.PrintLogInfo(&uuid, 500, "Turn Off - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to turn off user"})
 		return
 	}
-	utils.PrintLogInfo(&uuid, 200, "DeleteUser", nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User deleted successfully"})
+	utils.PrintLogInfo(&uuid, 200, "Turn Off", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User turned off successfully"})
 }
 
 func (h *AdminHandler) CreateInstrument(c *gin.Context) {

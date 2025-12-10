@@ -30,12 +30,7 @@ type CreateTeacherRequest struct {
 
 // Request untuk Update Teacher
 type UpdateTeacherProfileRequest struct {
-	Name          string  `json:"name" binding:"required,min=3,max=50"`
-	Email         string  `json:"email" binding:"required,email"`
-	Phone         string  `json:"phone" binding:"required,numeric,min=9,max=14"`
-	Image         *string `json:"image" binding:"omitempty,url"`
-	Bio           *string `json:"bio" binding:"omitempty,max=500"`
-	InstrumentIDs []int   `json:"instrument_ids" binding:"required,min=1,dive,gt=0"`
+	InstrumentIDs []int `json:"instrument_ids" binding:"required,min=1,dive,gt=0"`
 }
 
 type UpdateTeacherProfileRequestByTeacher struct {
@@ -122,12 +117,7 @@ func MapFinishClassRequestToClassHistory(req *FinishClassRequest, bookingID int,
 }
 func MapUpdateTeacherRequestToUser(req *UpdateTeacherProfileRequest) *domain.User {
 	return &domain.User{
-		Name:  req.Name,
-		Email: req.Email,
-		Phone: req.Phone,
-		Image: req.Image,
 		TeacherProfile: &domain.TeacherProfile{
-			Bio:         deref(req.Bio),
 			Instruments: mapInstrumentIDs(req.InstrumentIDs),
 		},
 	}

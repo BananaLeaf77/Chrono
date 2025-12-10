@@ -710,7 +710,7 @@ func (r *adminRepo) UpdateTeacher(ctx context.Context, user *domain.User, instru
 func (r *adminRepo) GetAllTeachers(ctx context.Context) ([]domain.User, error) {
 	var teachers []domain.User
 	if err := r.db.WithContext(ctx).
-		Where("role = ? AND deleted_at IS NULL", domain.RoleTeacher).
+		Where("role = ?", domain.RoleTeacher).
 		Find(&teachers).Error; err != nil {
 		return nil, errors.New(utils.TranslateDBError(err))
 	}
@@ -741,7 +741,7 @@ func (r *adminRepo) DeleteUser(ctx context.Context, uuid string) error {
 	// 1️⃣ Check if user exists
 	var user domain.User
 	if err := tx.
-		Where("uuid = ? AND deleted_at IS NULL", uuid).
+		Where("uuid = ? AND deleted_at IS NULL AND role = ?", uuid, domain.RoleTeacher).
 		First(&user).Error; err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
