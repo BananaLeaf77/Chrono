@@ -19,6 +19,15 @@ func NewAdminService(adminRepo domain.AdminRepository) domain.AdminUseCase {
 	}
 }
 
+func (s *adminService) ClearUserDeletedAt(ctx context.Context, userUUID string) error {
+	err := s.adminRepo.ClearUserDeletedAt(ctx, userUUID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *adminService) GetAllClassHistories(ctx context.Context) (*[]domain.ClassHistory, error) {
 	data, err := s.adminRepo.GetAllClassHistories(ctx)
 	if err != nil {

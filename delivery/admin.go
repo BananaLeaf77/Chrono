@@ -43,6 +43,7 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 		// Users
 		admin.GET("/users", h.GetAllUsers)
 		admin.DELETE("/users/:uuid", h.DeleteUser)
+		admin.PUT("/users/:uuid", h.ClearUserDeletedAt)
 
 		// Packages
 		admin.POST("/packages", h.CreatePackage)
@@ -585,4 +586,16 @@ func (h *AdminHandler) GetStudentByUUID(c *gin.Context) {
 
 	utils.PrintLogInfo(&name, 200, "GetStudentByUUID", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": student, "message": "Student retrieved successfully"})
+}
+
+func (h *AdminHandler) ClearUserDeletedAt(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	uuid := c.Param("uuid")
+	if err := h.uc.ClearUserDeletedAt(c.Request.Context(), uuid); err != nil {
+		utils.PrintLogInfo(&name, 500, "ClearUserDeletedAt - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to restore user"})
+		return
+	}
+	utils.PrintLogInfo(&name, 200, "ClearUserDeletedAt", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User restored successfully"})
 }
