@@ -3,6 +3,8 @@ package domain
 import "context"
 
 type AdminUseCase interface {
+	// Self
+
 	// Teacher Management
 	CreateTeacher(ctx context.Context, user *User, instrumentIDs []int) (*User, error)
 	GetAllTeachers(ctx context.Context) ([]User, error)

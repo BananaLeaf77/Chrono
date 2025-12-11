@@ -7,6 +7,7 @@ import (
 )
 
 type AuthUseCase interface {
+	ChangeEmail(ctx context.Context, userUUID, newEmail, password string) error
 	Me(ctx context.Context, userUUID string) (*User, error)
 	GetAccessTokenManager() *utils.JWTManager
 	GetRefreshTokenManager() *utils.JWTManager // 🔥 add this line

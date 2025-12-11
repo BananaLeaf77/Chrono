@@ -64,7 +64,7 @@ func (r *managerRepo) ModifyStudentPackageQuota(ctx context.Context, studentUUID
 	}
 
 	// Update the remaining quota
-	studentPackage.RemainingQuota += incomingQuota
+	studentPackage.RemainingQuota = incomingQuota
 
 	// Ensure remaining quota doesn't go negative
 	if studentPackage.RemainingQuota < 0 {

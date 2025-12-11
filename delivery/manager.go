@@ -9,17 +9,18 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type ManagerHandler struct {
 	uc domain.ManagerUseCase
 }
 
-func NewManagerHandler(app *gin.Engine, uc domain.ManagerUseCase, jwtManager *utils.JWTManager) {
+func NewManagerHandler(app *gin.Engine, uc domain.ManagerUseCase, jwtManager *utils.JWTManager, db *gorm.DB) {
 	h := &ManagerHandler{uc: uc}
 
 	manager := app.Group("/manager")
-	manager.Use(config.AuthMiddleware(jwtManager), middleware.ManagerAndAdminOnly())
+	manager.Use(config.AuthMiddleware(jwtManager), middleware.ManagerAndAdminOnly(), middleware.ValidateTurnedOffUserMiddleware(db))
 	{
 		manager.GET("/students", h.GetAllStudents)
 		manager.GET("/students/:uuid", h.GetStudentByUUID)

@@ -161,7 +161,7 @@ func (r *adminRepo) UpdateManager(ctx context.Context, user *domain.User) error 
 func (r *adminRepo) GetAllManagers(ctx context.Context) ([]domain.User, error) {
 	var teachers []domain.User
 	if err := r.db.WithContext(ctx).
-		Where("role = ? AND deleted_at IS NULL", domain.RoleManagement).
+		Where("role = ?", domain.RoleManagement).
 		Find(&teachers).Error; err != nil {
 		return nil, errors.New(utils.TranslateDBError(err))
 	}
@@ -172,7 +172,7 @@ func (r *adminRepo) GetAllManagers(ctx context.Context) ([]domain.User, error) {
 func (r *adminRepo) GetManagerByUUID(ctx context.Context, uuid string) (*domain.User, error) {
 	var teacher domain.User
 	if err := r.db.WithContext(ctx).
-		Where("uuid = ? AND role = ? AND deleted_at IS NULL", uuid, domain.RoleManagement).
+		Where("uuid = ? AND role = ?", uuid, domain.RoleManagement).
 		First(&teacher).Error; err != nil {
 		return nil, errors.New(utils.TranslateDBError(err))
 	}
@@ -582,7 +582,7 @@ func (r *adminRepo) UpdateTeacher(ctx context.Context, user *domain.User, instru
 	if err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("guru tidak ditemukan")
+			return errors.New("guru tidak ditemukan / nonaktif")
 		}
 		return fmt.Errorf("error mencari guru: %w", err)
 	}
@@ -722,7 +722,7 @@ func (r *adminRepo) GetTeacherByUUID(ctx context.Context, uuid string) (*domain.
 	var teacher domain.User
 	if err := r.db.WithContext(ctx).
 		Preload("TeacherProfile.Instruments").
-		Where("uuid = ? AND role = ? AND deleted_at IS NULL", uuid, domain.RoleTeacher).
+		Where("uuid = ? AND role = ?", uuid, domain.RoleTeacher).
 		First(&teacher).Error; err != nil {
 		return nil, errors.New(utils.TranslateDBError(err))
 	}
@@ -741,7 +741,7 @@ func (r *adminRepo) DeleteUser(ctx context.Context, uuid string) error {
 	// 1️⃣ Check if user exists
 	var user domain.User
 	if err := tx.
-		Where("uuid = ? AND deleted_at IS NULL AND role = ?", uuid, domain.RoleTeacher).
+		Where("uuid = ? AND deleted_at IS NULL", uuid).
 		First(&user).Error; err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -750,39 +750,29 @@ func (r *adminRepo) DeleteUser(ctx context.Context, uuid string) error {
 		return fmt.Errorf("gagal mencari user: %w", err)
 	}
 
-	// 2️⃣ Delete TEACHER-related data
 	if user.Role == domain.RoleTeacher {
-		// Clear many-to-many relation (teacher_instruments)
-		if err := tx.Model(&domain.TeacherProfile{UserUUID: uuid}).
-			Association("Instruments").
-			Clear(); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("gagal menghapus relasi instrumen guru: %w", err)
-		}
+		// 2️⃣ Delete TEACHER-related data
+		if user.Role == domain.RoleTeacher {
+			// Clear many-to-many relation (teacher_instruments)
+			if err := tx.Model(&domain.TeacherProfile{UserUUID: uuid}).
+				Association("Instruments").
+				Clear(); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("gagal menghapus relasi instrumen guru: %w", err)
+			}
 
-		// Delete teacher profile
-		if err := tx.Where("user_uuid = ?", uuid).
-			Delete(&domain.TeacherProfile{}).Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("gagal menghapus profil guru: %w", err)
+			// Delete teacher profile
+			if err := tx.Where("user_uuid = ?", uuid).
+				Delete(&domain.TeacherProfile{}).Error; err != nil {
+				tx.Rollback()
+				return fmt.Errorf("gagal menghapus profil guru: %w", err)
+			}
 		}
 	}
 
 	// 3️⃣ Delete STUDENT-related data
 	if user.Role == domain.RoleStudent {
-		// Delete packages first (to avoid FK violation)
-		if err := tx.Where("student_uuid = ?", uuid).
-			Delete(&domain.StudentPackage{}).Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("gagal menghapus paket siswa: %w", err)
-		}
-
-		// Then delete student profile
-		if err := tx.Where("user_uuid = ?", uuid).
-			Delete(&domain.StudentProfile{}).Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("gagal menghapus profil siswa: %w", err)
-		}
+		return fmt.Errorf("siswa tidak dapat dihapus")
 	}
 
 	// 4️⃣ Soft delete user

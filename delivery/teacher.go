@@ -15,17 +15,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	"gorm.io/gorm"
 )
 
 type TeacherHandler struct {
 	tc domain.TeacherUseCase
 }
 
-func NewTeacherHandler(app *gin.Engine, tc domain.TeacherUseCase, jwtManager *utils.JWTManager) {
+func NewTeacherHandler(app *gin.Engine, tc domain.TeacherUseCase, jwtManager *utils.JWTManager, db *gorm.DB) {
 	h := &TeacherHandler{tc: tc}
 
 	teacher := app.Group("/teacher")
-	teacher.Use(config.AuthMiddleware(jwtManager), middleware.TeacherAndAdminOnly())
+	teacher.Use(config.AuthMiddleware(jwtManager), middleware.TeacherAndAdminOnly(), middleware.ValidateTurnedOffUserMiddleware(db))
 	{
 		teacher.GET("/profile", h.GetMyProfile)
 		teacher.GET("/schedules", h.GetMySchedules)

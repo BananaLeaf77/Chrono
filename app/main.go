@@ -129,11 +129,11 @@ func main() {
 	// ========================================================================
 	// INIT HANDLERS
 	// ========================================================================
-	delivery.NewAuthHandler(app, authService, authLimiter)
-	delivery.NewManagerHandler(app, managementService, authService.GetAccessTokenManager())
+	delivery.NewAuthHandler(app, authService, authLimiter, db)
+	delivery.NewManagerHandler(app, managementService, authService.GetAccessTokenManager(), db)
 	delivery.NewStudentHandler(app, studentService, authService.GetAccessTokenManager())
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
-	delivery.NewTeacherHandler(app, teacherService, authService.GetAccessTokenManager())
+	delivery.NewTeacherHandler(app, teacherService, authService.GetAccessTokenManager(), db)
 
 	// Start server
 	port := os.Getenv("APP_PORT")

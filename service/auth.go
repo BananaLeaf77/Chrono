@@ -36,6 +36,29 @@ func NewAuthService(userRepo domain.UserRepository, otpRepo domain.OTPRepository
 	}
 }
 
+func (s *authService) ChangeEmail(ctx context.Context, userUUID, newEmail, password string) error {
+	user, err := s.userRepo.GetUserByUUID(ctx, userUUID)
+	if err != nil {
+		return err
+	}
+
+	// Compare pass
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	if err != nil {
+		return errors.New("invalid password")
+	}
+
+	// Cek apakah email baru sudah ada
+	_, err = s.userRepo.GetUserByEmail(ctx, newEmail)
+	if err == nil {
+		return errors.New("email already in use")
+	}
+
+	// Update email
+	user.Email = newEmail
+	return s.userRepo.UpdateUser(ctx, user)
+}
+
 func (s *authService) GetRefreshTokenManager() *utils.JWTManager {
 	return s.refreshToken
 }

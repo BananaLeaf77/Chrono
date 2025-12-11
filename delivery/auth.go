@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type AuthHandler struct {
 	authUC domain.AuthUseCase
 }
 
-func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase, authLimiter middleware.RateLimiter) {
+func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase, authLimiter middleware.RateLimiter, db *gorm.DB) {
 	handler := &AuthHandler{authUC: authUC}
 
 	// Ping Route (no rate limiting)
@@ -60,11 +61,51 @@ func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase, authLimiter middle
 
 	// Protected routes (use global rate limiting)
 	protected := r.Group("/auth")
-	protected.Use(config.AuthMiddleware(handler.authUC.GetAccessTokenManager()))
+	protected.Use(config.AuthMiddleware(handler.authUC.GetAccessTokenManager()), middleware.ValidateTurnedOffUserMiddleware(db))
 	{
 		protected.GET("/me", handler.Me)
 		protected.POST("/change-password", handler.ChangePassword)
+		protected.POST("/change-email", handler.ChangeEmail)
 	}
+}
+
+type ChangeEmailRequest struct {
+	NewEmail string `json:"new_email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
+}
+
+func (h *AuthHandler) ChangeEmail(c *gin.Context) {
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		utils.PrintLogInfo(nil, 401, "ChangePassword", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Failed to get user from context",
+			"error":   "unauthorized"})
+		return
+	}
+
+	var req ChangeEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.PrintLogInfo(nil, 400, "ChangeEmail", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request",
+			"error":   utils.TranslateValidationError(err)})
+		return
+	}
+
+	if err := h.authUC.ChangeEmail(c.Request.Context(), userUUID.(string), strings.ToLower(req.NewEmail), req.Password); err != nil {
+		utils.PrintLogInfo(nil, 401, "ChangeEmail", &err)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Failed to change email",
+			"error":   err.Error()})
+		return
+	}
+	utils.PrintLogInfo(nil, 200, "ChangeEmail", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Email changed successfully"})
+
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {

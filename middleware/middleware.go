@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // role checking middleware
@@ -85,5 +86,59 @@ func ManagerAndAdminOnly() gin.HandlerFunc {
 			return
 		}
 		c.Next()
+	}
+}
+
+func ValidateTurnedOffUserMiddleware(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := utils.GetAPIHitter(c)
+		role, exists := c.Get("role")
+		if !exists {
+			utils.PrintLogInfo(&name, 403, "Role Check Failure", nil)
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "User role checker failed / not found",
+			})
+			c.Abort()
+			return
+		}
+
+		if role != domain.RoleTeacher && role != domain.RoleManagement {
+			c.Next()
+		}
+
+		userUUID, exists := c.Get("userUUID")
+		if !exists {
+			utils.PrintLogInfo(&name, 403, "User UUID checker failure", nil)
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "User UUID not found",
+			})
+			c.Abort()
+			return
+		}
+
+		var user domain.User
+		err := db.Model(domain.User{}).Where("uuid = ?", userUUID.(string)).First(&user).Error
+		if err != nil {
+			utils.PrintLogInfo(&name, 500, "Database error when fetching user", &err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Database error when fetching user",
+				"error":   err.Error(),
+			})
+			c.Abort()
+			return
+		}
+
+		if user.DeletedAt != nil {
+			utils.PrintLogInfo(&name, 403, "User account is turned off", nil)
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "User account is turned off. Please contact administrator.",
+			})
+			c.Abort()
+			return
+		}
 	}
 }
