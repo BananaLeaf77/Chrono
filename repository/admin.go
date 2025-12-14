@@ -22,14 +22,34 @@ func NewAdminRepository(db *gorm.DB) domain.AdminRepository {
 }
 
 func (r *adminRepo) ClearUserDeletedAt(ctx context.Context, userUUID string) error {
-	var fetchedUser domain.User
-	err := r.db.WithContext(ctx).Model(&domain.User{}).Where("uuid = ? AND deleted_at IS NOT NULL", userUUID).First(fetchedUser).Error
+	// First check if user exists and is deleted
+	var count int64
+	err := r.db.WithContext(ctx).Model(&domain.User{}).
+		Where("uuid = ? AND deleted_at IS NOT NULL", userUUID).
+		Count(&count).Error
+
 	if err != nil {
-		return fmt.Errorf("pengguna sudah aktif: %w", err)
+		return fmt.Errorf("error memeriksa status pengguna: %w", err)
 	}
 
-	err = r.db.WithContext(ctx).Model(&domain.User{}).Where("uuid = ?", userUUID).Update("deleted_at", nil).Error
-	return err
+	if count == 0 {
+		return fmt.Errorf("pengguna tidak ditemukan atau tidak dalam status non-aktif")
+	}
+
+	// Update directly
+	result := r.db.WithContext(ctx).Model(&domain.User{}).
+		Where("uuid = ?", userUUID).
+		Update("deleted_at", nil)
+
+	if result.Error != nil {
+		return fmt.Errorf("gagal mengaktifkan kembali pengguna: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("pengguna tidak ditemukan")
+	}
+
+	return nil
 }
 
 // Class

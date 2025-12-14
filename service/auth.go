@@ -114,13 +114,16 @@ func (s *authService) ResendOTP(ctx context.Context, email string) error {
 func (s *authService) Login(ctx context.Context, email, password string) (*domain.AuthTokens, error) {
 	user, err := s.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, errors.New("email atau password salah")
 	}
 
+	if user.DeletedAt != nil {
+		return nil, errors.New("akun anda telah dinonaktifkan, silakan hubungi admin untuk informasi lebih lanjut")
+	}
 	// Compare password
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, errors.New("email atau password salah")
 	}
 
 	// Generate tokens dengan UUID + Role

@@ -135,7 +135,7 @@ func ValidateTurnedOffUserMiddleware(db *gorm.DB) gin.HandlerFunc {
 			utils.PrintLogInfo(&name, 403, "User account is turned off", nil)
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
-				"message": "User account is turned off. Please contact administrator.",
+				"message": "Akun anda telah dinonaktifkan, silakan hubungi admin untuk informasi lebih lanjut",
 			})
 			c.Abort()
 			return
