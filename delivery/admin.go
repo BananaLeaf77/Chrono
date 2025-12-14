@@ -71,6 +71,7 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 type CreatePackageRequest struct {
 	Name         string  `json:"name" binding:"required,min=3,max=50"`
 	Duration     int     `json:"duration" binding:"required,oneof=30 60"`
+	Price        float64 `json:"price" binding:"required,gt=0"`
 	Quota        int     `json:"quota" binding:"required,gt=0"`
 	Description  *string `json:"description,omitempty"`
 	InstrumentID int     `json:"instrument_id" binding:"required,gt=0"`
@@ -143,6 +144,7 @@ func (h *AdminHandler) CreatePackage(c *gin.Context) {
 
 	pkg := &domain.Package{
 		Name:         req.Name,
+		Price:        req.Price,
 		Quota:        req.Quota,
 		Duration:     req.Duration,
 		Description:  *req.Description,

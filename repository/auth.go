@@ -26,7 +26,7 @@ func (r *userRepository) GetUserByTelephone(ctx context.Context, telephone strin
 
 func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
-	if err := r.db.WithContext(ctx).First(&user, "email = ? AND deleted_at IS NULL", email).Error; err != nil {
+	if err := r.db.WithContext(ctx).First(&user, "email = ?", email).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil

@@ -124,7 +124,7 @@ func ValidateTurnedOffUserMiddleware(db *gorm.DB) gin.HandlerFunc {
 			utils.PrintLogInfo(&name, 500, "Database error when fetching user", &err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"message": "Database error when fetching user",
+				"message": "Pengguna tidak ditemukan",
 				"error":   err.Error(),
 			})
 			c.Abort()

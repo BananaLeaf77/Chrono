@@ -41,6 +41,7 @@ type StudentProfile struct {
 type Package struct {
 	ID           int        `gorm:"primaryKey" json:"id"`
 	Name         string     `gorm:"not null" json:"name"`
+	Price        float64    `gorm:"not null" json:"price"`
 	Quota        int        `gorm:"not null" json:"quota"`
 	Duration     int        `gorm:"not null;default:30" json:"duration"` // Minutes: 30 or 60
 	Description  string     `json:"description"`
