@@ -73,7 +73,7 @@ type CreatePackageRequest struct {
 	Duration     int     `json:"duration" binding:"required,oneof=30 60"`
 	Price        float64 `json:"price" binding:"required,gt=0"`
 	Quota        int     `json:"quota" binding:"required,gt=0"`
-	Description  *string `json:"description,omitempty"`
+	Description  string  `json:"description,omitempty"`
 	InstrumentID int     `json:"instrument_id" binding:"required,gt=0"`
 }
 type UpdatePackageRequest struct {
@@ -147,7 +147,7 @@ func (h *AdminHandler) CreatePackage(c *gin.Context) {
 		Price:        req.Price,
 		Quota:        req.Quota,
 		Duration:     req.Duration,
-		Description:  *req.Description,
+		Description:  req.Description,
 		InstrumentID: req.InstrumentID,
 	}
 

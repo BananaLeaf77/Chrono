@@ -330,17 +330,17 @@ func (r *adminRepo) AssignPackageToStudent(ctx context.Context, studentUUID stri
 	}
 
 	// 4️⃣ Check if student already has this package active
-	var existing domain.StudentPackage
-	if err := tx.Where(`
-		student_uuid = ? 
-		AND package_id = ? 
-		AND end_date > ? 
-		AND remaining_quota > 0`,
-		studentUUID, packageID, time.Now()).
-		First(&existing).Error; err == nil {
-		tx.Rollback()
-		return errors.New("siswa sudah memiliki paket ini yang masih aktif")
-	}
+	// var existing domain.StudentPackage
+	// if err := tx.Where(`
+	// 	student_uuid = ? 
+	// 	AND package_id = ? 
+	// 	AND end_date > ? 
+	// 	AND remaining_quota > 0`,
+	// 	studentUUID, packageID, time.Now()).
+	// 	First(&existing).Error; err == nil {
+	// 	tx.Rollback()
+	// 	return errors.New("siswa sudah memiliki paket ini yang masih aktif")
+	// }
 
 	// 5️⃣ Assign new package
 	newSub := domain.StudentPackage{
