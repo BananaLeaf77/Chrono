@@ -3,6 +3,7 @@ package delivery
 import (
 	"chronosphere/config"
 	"chronosphere/domain"
+	"chronosphere/dto"
 	"chronosphere/middleware"
 	"chronosphere/utils"
 	"net/http"
@@ -91,5 +92,50 @@ func (h *ManagerHandler) ModifyStudentPackageQuota(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Package quota modified successfully",
+	})
+}
+
+func (h *ManagerHandler) UpdateManager(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		utils.PrintLogInfo(&name, 401, "UpdateManager", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to Update Manager Data",
+		})
+		return
+	}
+
+	var payload dto.UpdateManagerRequest
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		utils.PrintLogInfo(&name, 400, "UpdateManager", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   utils.TranslateValidationError(err),
+			"message": "Invalid request payload",
+		})
+		return
+	}
+
+	payload.UUID = userUUID.(string)
+
+	filteredPayload := dto.MapUpdateManagerRequestByManager(&payload)
+	err := h.uc.UpdateManager(c.Request.Context(), filteredPayload)
+	if err != nil {
+		utils.PrintLogInfo(&name, 500, "UpdateManager", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to Update Manager Data",
+		})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "UpdateManager", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Manager Data Updated Successfully",
 	})
 }

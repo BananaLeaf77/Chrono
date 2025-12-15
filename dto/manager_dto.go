@@ -59,3 +59,21 @@ func MapUpdateManagerRequestToUser(req *UpdateManagerProfileRequest) *domain.Use
 		Image: req.Image,
 	}
 }
+
+type UpdateManagerRequest struct {
+	UUID  string  `json:"uuid" binding:"required,uuid"`
+	Name  string  `json:"name" binding:"required,min=3,max=50"`
+	Email string  `json:"email" binding:"required,email"`
+	Phone string  `json:"phone" binding:"required,numeric,min=9,max=14"`
+	Image *string `json:"image" binding:"omitempty,url"`
+}
+
+func MapUpdateManagerRequestByManager(req *UpdateManagerRequest) *domain.User {
+	return &domain.User{
+		UUID:  req.UUID,
+		Name:  req.Name,
+		Email: strings.ToLower(req.Email),
+		Phone: req.Phone,
+		Image: req.Image,
+	}
+}

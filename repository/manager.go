@@ -18,6 +18,10 @@ func NewManagerRepository(db *gorm.DB) domain.ManagerRepository {
 	return &managerRepo{db: db}
 }
 
+func (r *managerRepo) UpdateManager(ctx context.Context, manager *domain.User) error {
+	return nil
+}
+
 func (r *managerRepo) GetAllStudents(ctx context.Context) ([]domain.User, error) {
 	var students []domain.User
 	if err := r.db.WithContext(ctx).

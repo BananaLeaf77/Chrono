@@ -26,6 +26,10 @@ func (s *managerService) GetAllStudents(ctx context.Context) ([]domain.User, err
 	return data, nil
 }
 
+func (s *managerService) UpdateManager(ctx context.Context, manager *domain.User) error {
+	return s.managerRepo.UpdateManager(ctx, manager)
+}
+
 // ✅ Get Student by UUID
 func (s *managerService) GetStudentByUUID(ctx context.Context, uuid string) (*domain.User, error) {
 	data, err := s.managerRepo.GetStudentByUUID(ctx, uuid)
