@@ -39,7 +39,7 @@ func (h *ManagerHandler) UpdateManager(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"error":   "Unauthorized: missing user context",
-			"message": "Failed to Get My Class History",
+			"message": "Failed to update manager profile",
 		})
 		return
 	}

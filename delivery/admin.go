@@ -80,7 +80,7 @@ func (h *AdminHandler) UpdateAdmin(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"error":   "Unauthorized: missing user context",
-			"message": "Failed to Get My Class History",
+			"message": "Failed to update admin profile",
 		})
 		return
 	}
