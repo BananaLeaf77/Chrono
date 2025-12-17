@@ -21,6 +21,7 @@ type SlotsAvailability struct {
 type CreateTeacherRequest struct {
 	Name          string  `json:"name" binding:"required,min=3,max=50"`
 	Email         string  `json:"email" binding:"required,email"`
+	Gender        string  `json:"gender" binding:"required,oneof=male female"`
 	Phone         string  `json:"phone" binding:"required,numeric,min=9,max=14"`
 	Password      string  `json:"password" binding:"required,min=8"`
 	Image         *string `json:"image" binding:"omitempty,url"`
@@ -34,19 +35,21 @@ type UpdateTeacherProfileRequest struct {
 }
 
 type UpdateTeacherProfileRequestByTeacher struct {
-	Name  string  `json:"name" binding:"required,min=3,max=50"`
-	Email string  `json:"email" binding:"required,email"`
-	Phone string  `json:"phone" binding:"required,numeric,min=9,max=14"`
-	Image *string `json:"image" binding:"omitempty,url"`
-	Bio   *string `json:"bio" binding:"omitempty,max=500"`
+	Name string `json:"name" binding:"required,min=3,max=50"`
+	// Email string  `json:"email" binding:"required,email"`
+	Phone  string  `json:"phone" binding:"required,numeric,min=9,max=14"`
+	Image  *string `json:"image" binding:"omitempty,url"`
+	Bio    *string `json:"bio" binding:"omitempty,max=500"`
+	Gender string  `json:"gender" binding:"required,oneof=male female"`
 }
 
 func MapCreateTeacherRequestToUserByTeacher(req *UpdateTeacherProfileRequestByTeacher) domain.User {
 	return domain.User{
-		Name:  req.Name,
-		Email: req.Email,
-		Phone: req.Phone,
-		Image: req.Image,
+		Name: req.Name,
+		// Email: req.Email,
+		Phone:  req.Phone,
+		Image:  req.Image,
+		Gender: req.Gender,
 		TeacherProfile: &domain.TeacherProfile{
 			Bio: deref(req.Bio),
 		},
@@ -61,6 +64,7 @@ func MapCreateTeacherRequestToUser(req *CreateTeacherRequest) *domain.User {
 		Phone:    req.Phone,
 		Password: req.Password,
 		Role:     domain.RoleTeacher,
+		Gender:   req.Gender,
 		Image:    req.Image,
 		TeacherProfile: &domain.TeacherProfile{
 			Bio:         deref(req.Bio),
@@ -70,7 +74,6 @@ func MapCreateTeacherRequestToUser(req *CreateTeacherRequest) *domain.User {
 }
 
 type FinishClassRequest struct {
-	InstrumentID int      `json:"instrument_id" binding:"required"`
 	PackageID    *int     `json:"package_id,omitempty"`          // optional, only if class used a package
 	Date         string   `json:"date" binding:"required"`       // e.g. "2025-11-03"
 	StartTime    string   `json:"start_time" binding:"required"` // ✅ Changed to string

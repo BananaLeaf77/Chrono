@@ -37,8 +37,41 @@ func NewTeacherHandler(app *gin.Engine, tc domain.TeacherUseCase, jwtManager *ut
 		teacher.GET("/class-history", h.GetMyClassHistory)
 		teacher.DELETE("/cancel/:id", h.CancelBookedClass)
 		teacher.PUT("/finish-class/:id", h.FinishClass)
+		teacher.DELETE("/delete-availability-by-day/:day", h.DeleteAvailabilityBasedOnDay)
 
 	}
+}
+
+func (h *TeacherHandler) DeleteAvailabilityBasedOnDay(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		utils.PrintLogInfo(&name, http.StatusUnauthorized, "DeleteAvailabilityBasedOnDay", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to delete availability based on day",
+		})
+		return
+	}
+
+	dayOfWeek := c.Param("day")
+
+	err := h.tc.DeleteAvailabilityBasedOnDay(c.Request.Context(), userUUID.(string), dayOfWeek)
+	if err != nil {
+		utils.PrintLogInfo(&name, http.StatusInternalServerError, "DeleteAvailabilityBasedOnDay", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Failed to delete availability based on day",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": fmt.Sprintf("Successfully deleted availability for %s", dayOfWeek),
+	})
 }
 
 func (h *TeacherHandler) GetMyClassHistory(c *gin.Context) {

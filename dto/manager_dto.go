@@ -11,31 +11,35 @@ type CreateManagerRequest struct {
 	Email    string  `json:"email" binding:"required,email"`
 	Phone    string  `json:"phone" binding:"required,numeric,min=9,max=14"`
 	Password string  `json:"password" binding:"required,min=8"`
+	Gender   string  `json:"gender" binding:"required,oneof=male female"`
 	Image    *string `json:"image" binding:"omitempty,url"`
 	Bio      *string `json:"bio" binding:"omitempty,max=500"`
 }
 
 // Request untuk Update Teacher
 type UpdateManagerProfileRequest struct {
-	Name  string  `json:"name" binding:"required,min=3,max=50"`
-	Email string  `json:"email" binding:"required,email"`
-	Phone string  `json:"phone" binding:"required,numeric,min=9,max=14"`
-	Image *string `json:"image" binding:"omitempty,url"`
+	Name   string  `json:"name" binding:"required,min=3,max=50"`
+	Email  string  `json:"email" binding:"required,email"`
+	Phone  string  `json:"phone" binding:"required,numeric,min=9,max=14"`
+	Image  *string `json:"image" binding:"omitempty,url"`
+	Gender string  `json:"gender" binding:"required,oneof=male female"`
 }
 
 type UpdateManagerProfileRequestByManager struct {
-	Name  string  `json:"name" binding:"required,min=3,max=50"`
-	Email string  `json:"email" binding:"required,email"`
-	Phone string  `json:"phone" binding:"required,numeric,min=9,max=14"`
-	Image *string `json:"image" binding:"omitempty,url"`
+	Name   string  `json:"name" binding:"required,min=3,max=50"`
+	Email  string  `json:"email" binding:"required,email"`
+	Phone  string  `json:"phone" binding:"required,numeric,min=9,max=14"`
+	Image  *string `json:"image" binding:"omitempty,url"`
+	Gender string  `json:"gender" binding:"required,oneof=male female"`
 }
 
 func MapCreateManagerRequestToUserByManager(req *UpdateManagerProfileRequestByManager) domain.User {
 	return domain.User{
-		Name:  req.Name,
-		Email: strings.ToLower(req.Email),
-		Phone: req.Phone,
-		Image: req.Image,
+		Name:   req.Name,
+		Email:  strings.ToLower(req.Email),
+		Phone:  req.Phone,
+		Image:  req.Image,
+		Gender: req.Gender,
 	}
 }
 
@@ -48,32 +52,34 @@ func MapCreateManagerRequestToUser(req *CreateManagerRequest) *domain.User {
 		Password: req.Password,
 		Role:     domain.RoleManagement,
 		Image:    req.Image,
+		Gender:   req.Gender,
 	}
 }
 
 func MapUpdateManagerRequestToUser(req *UpdateManagerProfileRequest) *domain.User {
 	return &domain.User{
-		Name:  req.Name,
-		Email: req.Email,
-		Phone: req.Phone,
-		Image: req.Image,
+		Name:   req.Name,
+		Email:  req.Email,
+		Phone:  req.Phone,
+		Image:  req.Image,
+		Gender: req.Gender,
 	}
 }
 
 type UpdateManagerRequest struct {
-	UUID  string  `json:"uuid" binding:"required,uuid"`
-	Name  string  `json:"name" binding:"required,min=3,max=50"`
-	Email string  `json:"email" binding:"required,email"`
-	Phone string  `json:"phone" binding:"required,numeric,min=9,max=14"`
-	Image *string `json:"image" binding:"omitempty,url"`
+	UUID   string `json:"uuid" binding:"required,uuid"`
+	Name   string `json:"name" binding:"required,min=3,max=50"`
+	Gender string `json:"gender" binding:"required,oneof=male female"`
+	Phone  string `json:"phone" binding:"required,numeric,min=9,max=14"`
+	Image  string `json:"image" binding:"omitempty,url"`
 }
 
-func MapUpdateManagerRequestByManager(req *UpdateManagerRequest) *domain.User {
+func MakeUpdateManagerRequest(req *UpdateManagerRequest) *domain.User {
 	return &domain.User{
-		UUID:  req.UUID,
-		Name:  req.Name,
-		Email: strings.ToLower(req.Email),
-		Phone: req.Phone,
-		Image: req.Image,
+		UUID:   req.UUID,
+		Name:   req.Name,
+		Phone:  req.Phone,
+		Image:  &req.Image,
+		Gender: req.Gender,
 	}
 }

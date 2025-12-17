@@ -14,11 +14,15 @@ const (
 	StatusRescheduled = "rescheduled"
 	StatusOngoing     = "ongoing"
 	StatusUpcoming    = "upcoming"
+
+	GenderMale   = "male"
+	GenderFemale = "female"
 )
 
 type User struct {
 	UUID     string  `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"uuid"`
 	Name     string  `gorm:"not null;size:50" json:"name"`
+	Gender   string  `gorm:"not null;size:10" json:"gender"` // male | female
 	Email    string  `gorm:"unique;not null" json:"email"`
 	Phone    string  `gorm:"unique;not null;size:14" json:"phone"`
 	Password string  `gorm:"not null" json:"-"`

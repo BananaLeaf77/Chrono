@@ -21,6 +21,71 @@ func NewAdminRepository(db *gorm.DB) domain.AdminRepository {
 	return &adminRepo{db: db}
 }
 
+func (r *adminRepo) UpdateAdmin(ctx context.Context, payload domain.User) error {
+	// Mulai transaction
+	tx := r.db.WithContext(ctx).Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Cek apakah user exists dan belum dihapus
+	var existingUser domain.User
+	err := tx.Where("uuid = ? AND role = ?", payload.UUID, domain.RoleAdmin).First(&existingUser).Error
+	if err != nil {
+		tx.Rollback()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("admin tidak ditemukan")
+		}
+		return fmt.Errorf("error mencari admin: %w", err)
+	}
+
+	// Check email duplicate dengan user lain
+	var emailCount int64
+	err = tx.Model(&domain.User{}).
+		Where("email = ? AND uuid != ?", payload.Email, payload.UUID).
+		Count(&emailCount).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error checking email: %w", err)
+	}
+	if emailCount > 0 {
+		tx.Rollback()
+		return errors.New("email sudah digunakan oleh user lain")
+	}
+
+	// Check phone duplicate dengan user lain
+	var phoneCount int64
+	err = tx.Model(&domain.User{}).
+		Where("phone = ? AND uuid != ?", payload.Phone, payload.UUID).
+		Count(&phoneCount).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error checking phone: %w", err)
+	}
+	if phoneCount > 0 {
+		tx.Rollback()
+		return errors.New("nomor telepon sudah digunakan oleh user lain")
+	}
+
+	// Update user data
+	err = tx.Model(&domain.User{}).
+		Where("uuid = ?", payload.UUID).
+		Updates(payload).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal memperbarui data admin: %w", err)
+	}
+
+	// Commit transaction jika semua berhasil
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("gagal commit transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (r *adminRepo) ClearUserDeletedAt(ctx context.Context, userUUID string) error {
 	// First check if user exists and is deleted
 	var count int64

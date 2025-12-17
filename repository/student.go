@@ -404,9 +404,13 @@ func (r *studentRepository) GetAvailableSchedules(ctx context.Context, studentUU
 		Table("teacher_schedules").
 		Joins("JOIN teacher_profiles ON teacher_profiles.user_uuid = teacher_schedules.teacher_uuid").
 		Joins("JOIN teacher_instruments ON teacher_instruments.teacher_profile_user_uuid = teacher_profiles.user_uuid").
+		// Add JOIN with users table to check if teacher is not deleted
+		Joins("JOIN users ON users.uuid = teacher_schedules.teacher_uuid").
 		Where("teacher_instruments.instrument_id IN ?", instrumentIDSlice).
 		Where("teacher_schedules.is_booked = ?", false).
 		Where("teacher_schedules.deleted_at IS NULL").
+		// Ensure teacher user is not soft-deleted
+		Where("users.deleted_at IS NULL").
 		Preload("Teacher").
 		Preload("TeacherProfile.Instruments").
 		Order("teacher_schedules.day_of_week ASC, teacher_schedules.start_time ASC").
@@ -467,23 +471,23 @@ func (r *studentRepository) UpdateStudentData(ctx context.Context, uuid string, 
 	}
 
 	// Check email duplicate dengan user lain
-	var emailCount int64
-	err = tx.Model(&domain.User{}).
-		Where("email = ? AND uuid != ? AND deleted_at IS NULL", payload.Email, uuid).
-		Count(&emailCount).Error
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("error checking email: %w", err)
-	}
-	if emailCount > 0 {
-		tx.Rollback()
-		return errors.New("email sudah digunakan oleh pengguna lain")
-	}
+	// var emailCount int64
+	// err = tx.Model(&domain.User{}).
+	// 	Where("email = ? AND uuid != ?", payload.Email, uuid).
+	// 	Count(&emailCount).Error
+	// if err != nil {
+	// 	tx.Rollback()
+	// 	return fmt.Errorf("error checking email: %w", err)
+	// }
+	// if emailCount > 0 {
+	// 	tx.Rollback()
+	// 	return errors.New("email sudah digunakan oleh pengguna lain")
+	// }
 
 	// Check phone duplicate dengan user lain
 	var phoneCount int64
 	err = tx.Model(&domain.User{}).
-		Where("phone = ? AND uuid != ? AND deleted_at IS NULL", payload.Phone, uuid).
+		Where("phone = ? AND uuid != ?", payload.Phone, uuid).
 		Count(&phoneCount).Error
 	if err != nil {
 		tx.Rollback()

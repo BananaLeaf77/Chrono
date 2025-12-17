@@ -19,6 +19,13 @@ func NewAdminService(adminRepo domain.AdminRepository) domain.AdminUseCase {
 	}
 }
 
+func (s *adminService) UpdateAdmin(ctx context.Context, payload domain.User) error {
+	if err := s.adminRepo.UpdateAdmin(ctx, payload); err != nil {
+		return errors.New(utils.TranslateDBError(err))
+	}
+	return nil
+}
+
 func (s *adminService) ClearUserDeletedAt(ctx context.Context, userUUID string) error {
 	err := s.adminRepo.ClearUserDeletedAt(ctx, userUUID)
 	if err != nil {

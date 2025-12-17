@@ -7,6 +7,7 @@ import (
 	"chronosphere/middleware"
 	"chronosphere/utils"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,56 @@ func NewManagerHandler(app *gin.Engine, uc domain.ManagerUseCase, jwtManager *ut
 		manager.GET("/students", h.GetAllStudents)
 		manager.GET("/students/:uuid", h.GetStudentByUUID)
 		manager.PUT("/students/:uuid/packages/:package_id/quota", h.ModifyStudentPackageQuota)
+		manager.PUT("/modify", h.UpdateManager)
 	}
+}
+
+func (h *ManagerHandler) UpdateManager(c *gin.Context) {
+	managerName := utils.GetAPIHitter(c)
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		utils.PrintLogInfo(&managerName, 401, "UpdateManager", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to Get My Class History",
+		})
+		return
+	}
+	var req dto.UpdateManagerRequest
+	req.UUID = userUUID.(string)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.PrintLogInfo(&managerName, 400, "UpdateManager - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   utils.TranslateValidationError(err),
+			"massage": "Failed to update manager profile",
+		})
+
+		return
+	}
+
+	defaultImage := os.Getenv("DEFAULT_PROFILE_IMAGE")
+	if req.Image == "" {
+		req.Image = defaultImage
+	}
+
+	user := dto.MakeUpdateManagerRequest(&req)
+	user.UUID = userUUID.(string) // assign dari URL, bukan dari JSON
+	if err := h.uc.UpdateManager(c.Request.Context(), user); err != nil {
+		utils.PrintLogInfo(&managerName, 500, "UpdateManager - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   utils.TranslateDBError(err),
+			"message": "Failed to update manager profile",
+		})
+		return
+	}
+	utils.PrintLogInfo(&managerName, 200, "UpdateManager", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Manager profile updated",
+	})
 }
 
 func (h *ManagerHandler) GetAllStudents(c *gin.Context) {
@@ -92,50 +142,5 @@ func (h *ManagerHandler) ModifyStudentPackageQuota(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Package quota modified successfully",
-	})
-}
-
-func (h *ManagerHandler) UpdateManager(c *gin.Context) {
-	name := utils.GetAPIHitter(c)
-	userUUID, exists := c.Get("userUUID")
-	if !exists {
-		utils.PrintLogInfo(&name, 401, "UpdateManager", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"error":   "Unauthorized: missing user context",
-			"message": "Failed to Update Manager Data",
-		})
-		return
-	}
-
-	var payload dto.UpdateManagerRequest
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		utils.PrintLogInfo(&name, 400, "UpdateManager", &err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   utils.TranslateValidationError(err),
-			"message": "Invalid request payload",
-		})
-		return
-	}
-
-	payload.UUID = userUUID.(string)
-
-	filteredPayload := dto.MapUpdateManagerRequestByManager(&payload)
-	err := h.uc.UpdateManager(c.Request.Context(), filteredPayload)
-	if err != nil {
-		utils.PrintLogInfo(&name, 500, "UpdateManager", &err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-			"message": "Failed to Update Manager Data",
-		})
-		return
-	}
-
-	utils.PrintLogInfo(&name, 200, "UpdateManager", nil)
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Manager Data Updated Successfully",
 	})
 }

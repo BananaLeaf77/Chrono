@@ -7,6 +7,7 @@ import (
 	"chronosphere/middleware"
 	"chronosphere/utils"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -24,6 +25,9 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 	admin := app.Group("/admin")
 	admin.Use(config.AuthMiddleware(jwtManager), middleware.AdminOnly())
 	{
+		// Admin
+		admin.PUT("/modify", h.UpdateAdmin)
+
 		// Teacher
 		admin.POST("/teachers", h.CreateTeacher)
 		admin.PUT("/teachers/modify/:uuid", h.UpdateTeacher)
@@ -67,6 +71,53 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 }
 
 /* ---------- Request DTOs ---------- */
+
+func (h *AdminHandler) UpdateAdmin(c *gin.Context) {
+	adminName := utils.GetAPIHitter(c)
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		utils.PrintLogInfo(&adminName, 401, "UpdateAdmin", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "Unauthorized: missing user context",
+			"message": "Failed to Get My Class History",
+		})
+		return
+	}
+	var req dto.UpdateAdminProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.PrintLogInfo(&adminName, 400, "UpdateAdmin - BindJSON", &err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   utils.TranslateValidationError(err),
+			"massage": "Failed to update admin profile",
+		})
+
+		return
+	}
+
+	defaultImage := os.Getenv("DEFAULT_PROFILE_IMAGE")
+	if req.Image == "" {
+		req.Image = defaultImage
+	}
+
+	user := dto.MakeUpdateAdminProfileRequest(&req)
+	user.UUID = userUUID.(string) // assign dari URL, bukan dari JSON
+	if err := h.uc.UpdateAdmin(c.Request.Context(), user); err != nil {
+		utils.PrintLogInfo(&adminName, 500, "UpdateAdmin - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   utils.TranslateDBError(err),
+			"message": "Failed to update admin profile",
+		})
+		return
+	}
+	utils.PrintLogInfo(&adminName, 200, "UpdateAdmin", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Admin profile updated",
+	})
+}
 
 type CreatePackageRequest struct {
 	Name         string  `json:"name" binding:"required,min=3,max=50"`
@@ -192,7 +243,7 @@ func (h *AdminHandler) UpdatePackage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to update package", "success": false, "error": "Durasi paket hanya bisa 30 atau 60 menit"})
 		return
 	}
-	
+
 	pkg.Duration = req.Duration
 	pkg.InstrumentID = req.InstrumentID
 	pkg.Description = req.Description

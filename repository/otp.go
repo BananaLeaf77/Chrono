@@ -23,7 +23,7 @@ func NewOTPRedisRepository(addr, password string, db int) domain.OTPRepository {
 	return &otpRedisRepository{client: rdb}
 }
 
-func (r *otpRedisRepository) SaveOTP(ctx context.Context, email, otp, hashedPassword, name, phone string, ttl time.Duration) error {
+func (r *otpRedisRepository) SaveOTP(ctx context.Context, email, otp, hashedPassword, name, phone, gender string, ttl time.Duration) error {
 	key := "otp:" + email
 
 	data := map[string]string{
@@ -31,6 +31,7 @@ func (r *otpRedisRepository) SaveOTP(ctx context.Context, email, otp, hashedPass
 		"password": strings.TrimSpace(hashedPassword),
 		"name":     strings.TrimSpace(name),
 		"phone":    strings.TrimSpace(phone),
+		"gender":   strings.TrimSpace(gender),
 	}
 
 	if err := r.client.HSet(ctx, key, data).Err(); err != nil {

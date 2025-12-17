@@ -97,6 +97,7 @@ func (s *authService) ResendOTP(ctx context.Context, email string) error {
 		data["password"],
 		data["name"],
 		data["phone"],
+		data["gender"],
 		5*time.Minute,
 	)
 	if err != nil {
@@ -143,7 +144,7 @@ func (s *authService) Login(ctx context.Context, email, password string) (*domai
 	}, nil
 }
 
-func (s *authService) Register(ctx context.Context, email string, name string, telephone string, password string) error {
+func (s *authService) Register(ctx context.Context, email string, name string, telephone string, password string, gender string) error {
 	if _, err := s.userRepo.GetUserByEmail(ctx, email); err == nil {
 		return ErrEmailExists
 	}
@@ -171,7 +172,7 @@ func (s *authService) Register(ctx context.Context, email string, name string, t
 	}
 
 	// Save to Redis
-	if err := s.otpRepo.SaveOTP(ctx, email, otp, hashedPassword, name, telephone, time.Duration(otpTime)*time.Minute); err != nil {
+	if err := s.otpRepo.SaveOTP(ctx, email, otp, hashedPassword, name, telephone, gender, time.Duration(otpTime)*time.Minute); err != nil {
 		return fmt.Errorf("failed to save OTP: %w", err)
 	}
 
@@ -203,6 +204,7 @@ func (s *authService) VerifyOTP(ctx context.Context, email, otp string) error {
 		Phone:    data["phone"],
 		Password: data["password"], // Gunakan hash dari Redis
 		Role:     "student",
+		Gender:   data["gender"],
 	}
 
 	if err := s.userRepo.CreateUser(ctx, user); err != nil {
@@ -235,7 +237,7 @@ func (s *authService) ForgotPassword(ctx context.Context, email string) error {
 		return err
 	}
 
-	if err := s.otpRepo.SaveOTP(ctx, email, otp, "", "", "", 5*time.Minute); err != nil {
+	if err := s.otpRepo.SaveOTP(ctx, email, otp, "", "", "", "", 5*time.Minute); err != nil {
 		return err
 	}
 

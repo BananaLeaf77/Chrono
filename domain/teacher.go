@@ -15,6 +15,7 @@ type TeacherUseCase interface {
 	CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string, reason *string) error
 	FinishClass(ctx context.Context, bookingID int, teacherUUID string, payload ClassHistory) error
 	GetMyClassHistory(ctx context.Context, teacherUUID string) (*[]ClassHistory, error)
+	DeleteAvailabilityBasedOnDay(ctx context.Context, teacherUUID string, dayOfWeek string) error
 }
 
 type TeacherRepository interface {
@@ -28,4 +29,5 @@ type TeacherRepository interface {
 	CancelBookedClass(ctx context.Context, bookingID int, teacherUUID string, reason *string) error
 	FinishClass(ctx context.Context, bookingID int, teacherUUID string, payload ClassHistory) error
 	GetMyClassHistory(ctx context.Context, teacherUUID string) (*[]ClassHistory, error)
+	DeleteAvailabilityBasedOnDay(ctx context.Context, teacherUUID string, dayOfWeek string) error
 }

@@ -18,7 +18,68 @@ func NewManagerRepository(db *gorm.DB) domain.ManagerRepository {
 	return &managerRepo{db: db}
 }
 
-func (r *managerRepo) UpdateManager(ctx context.Context, manager *domain.User) error {
+func (r *managerRepo) UpdateManager(ctx context.Context, payload *domain.User) error {
+	// Mulai transaction
+	tx := r.db.WithContext(ctx).Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Cek apakah user exists dan belum dihapus
+	var existingUser domain.User
+	err := tx.Where("uuid = ? AND role = ?", payload.UUID, domain.RoleManagement).First(&existingUser).Error
+	if err != nil {
+		tx.Rollback()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("manager tidak ditemukan")
+		}
+		return fmt.Errorf("error mencari manager: %w", err)
+	}
+
+	// Check email duplicate dengan user lain
+	// var emailCount int64
+	// err = tx.Model(&domain.User{}).
+	// 	Where("email = ? AND uuid != ?", payload.Email, payload.UUID).
+	// 	Count(&emailCount).Error
+	// if err != nil {
+	// 	tx.Rollback()
+	// 	return fmt.Errorf("error checking email: %w", err)
+	// }
+	// if emailCount > 0 {
+	// 	tx.Rollback()
+	// 	return errors.New("email sudah digunakan oleh user lain")
+	// }
+
+	// Check phone duplicate dengan user lain
+	var phoneCount int64
+	err = tx.Model(&domain.User{}).
+		Where("phone = ? AND uuid != ?", payload.Phone, payload.UUID).
+		Count(&phoneCount).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error checking phone: %w", err)
+	}
+	if phoneCount > 0 {
+		tx.Rollback()
+		return errors.New("nomor telepon sudah digunakan oleh user lain")
+	}
+
+	// Update user data
+	err = tx.Model(&domain.User{}).
+		Where("uuid = ?", payload.UUID).
+		Updates(payload).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal memperbarui data manager: %w", err)
+	}
+
+	// Commit transaction jika semua berhasil
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("gagal commit transaction: %w", err)
+	}
+
 	return nil
 }
 

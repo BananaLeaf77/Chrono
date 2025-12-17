@@ -97,6 +97,7 @@ func BootDB() (*gorm.DB, *string, error) {
 		adminPass := os.Getenv("ADMIN_PASSWORD")
 		adminName := os.Getenv("ADMIN_NAME")
 		adminPhone := os.Getenv("ADMIN_PHONE")
+		adminGender := os.Getenv("ADMIN_GENDER")
 
 		if adminEmail != "" && adminPass != "" {
 			hashed, _ := bcrypt.GenerateFromPassword([]byte(adminPass), bcrypt.DefaultCost)
@@ -106,6 +107,7 @@ func BootDB() (*gorm.DB, *string, error) {
 				Phone:    adminPhone,
 				Password: string(hashed),
 				Role:     domain.RoleAdmin,
+				Gender:   adminGender,
 			}
 			if err := db.Create(&adminUser).Error; err != nil {
 				log.Fatalf("❌ Failed to seed admin user: %v", err)
@@ -137,35 +139,4 @@ func BootDB() (*gorm.DB, *string, error) {
 
 	log.Print("✅ Connected to ", utils.ColorText("Database", utils.Green), " successfully")
 	return db, &address, nil
-}
-
-func seedForTesting(db *gorm.DB) error {
-	defImageUser := os.Getenv("DEFAULT_PROFILE_IMAGE")
-
-	// Seed additional data for testing environment if needed
-	student := domain.User{
-		Name:     "Dog",
-		Email:    "dognub61@gmail.com",
-		Phone:    "08976238373",
-		Password: "user123123",
-		Role:     domain.RoleStudent,
-		Image:    &defImageUser,
-	}
-	if err := db.Create(&student).Error; err != nil {
-		return err
-	}
-
-	teacher := domain.User{
-		Name:     "Teacher",
-		Email:    "john.mayer@example.com",
-		Phone:    "0848219323",
-		Password: "securepass123",
-		Role:     domain.RoleTeacher,
-		Image:    &defImageUser,
-	}
-	if err := db.Create(&teacher).Error; err != nil {
-		return err
-	}
-
-	return nil
 }

@@ -18,6 +18,22 @@ func NewTeacherRepository(db *gorm.DB) domain.TeacherRepository {
 	return &teacherRepository{db: db}
 }
 
+func (r *teacherRepository) DeleteAvailabilityBasedOnDay(ctx context.Context, teacherUUID string, dayOfWeek string) error {
+	result := r.db.WithContext(ctx).
+		Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL", teacherUUID, dayOfWeek).
+		Delete(&domain.TeacherSchedule{})
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete availability: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("no availability found for the specified day")
+	}
+
+	return nil
+}
+
 func (r *teacherRepository) GetMyClassHistory(ctx context.Context, teacherUUID string) (*[]domain.ClassHistory, error) {
 	var histories []domain.ClassHistory
 
@@ -240,7 +256,7 @@ func (r *teacherRepository) UpdateTeacherData(ctx context.Context, uuid string, 
 
 	// Cek apakah user exists dan belum dihapus
 	var existingUser domain.User
-	err := tx.Where("uuid = ? AND role = ? AND deleted_at IS NULL", uuid, domain.RoleTeacher).First(&existingUser).Error
+	err := tx.Where("uuid = ? AND role = ?", uuid, domain.RoleTeacher).First(&existingUser).Error
 	if err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -250,23 +266,23 @@ func (r *teacherRepository) UpdateTeacherData(ctx context.Context, uuid string, 
 	}
 
 	// Check email duplicate dengan user lain
-	var emailCount int64
-	err = tx.Model(&domain.User{}).
-		Where("email = ? AND uuid != ? AND deleted_at IS NULL", payload.Email, uuid).
-		Count(&emailCount).Error
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("error checking email: %w", err)
-	}
-	if emailCount > 0 {
-		tx.Rollback()
-		return errors.New("email sudah digunakan oleh user lain")
-	}
+	// var emailCount int64
+	// err = tx.Model(&domain.User{}).
+	// 	Where("email = ? AND uuid != ?", payload.Email, uuid).
+	// 	Count(&emailCount).Error
+	// if err != nil {
+	// 	tx.Rollback()
+	// 	return fmt.Errorf("error checking email: %w", err)
+	// }
+	// if emailCount > 0 {
+	// 	tx.Rollback()
+	// 	return errors.New("email sudah digunakan oleh user lain")
+	// }
 
 	// Check phone duplicate dengan user lain
 	var phoneCount int64
 	err = tx.Model(&domain.User{}).
-		Where("phone = ? AND uuid != ? AND deleted_at IS NULL", payload.Phone, uuid).
+		Where("phone = ? AND uuid != ?", payload.Phone, uuid).
 		Count(&phoneCount).Error
 	if err != nil {
 		tx.Rollback()

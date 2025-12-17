@@ -13,6 +13,10 @@ func NewTeacherService(TeacherRepo domain.TeacherRepository) domain.TeacherUseCa
 	return &teacherService{repo: TeacherRepo}
 }
 
+func (s *teacherService) DeleteAvailabilityBasedOnDay(ctx context.Context, teacherUUID string, dayOfWeek string) error {
+	return s.repo.DeleteAvailabilityBasedOnDay(ctx, teacherUUID, dayOfWeek)
+}
+
 func (s *teacherService) GetMyClassHistory(ctx context.Context, teacherUUID string) (*[]domain.ClassHistory, error) {
 	return s.repo.GetMyClassHistory(ctx, teacherUUID)
 }

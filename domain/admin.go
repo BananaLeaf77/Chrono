@@ -4,6 +4,7 @@ import "context"
 
 type AdminUseCase interface {
 	// Self
+	UpdateAdmin(ctx context.Context, payload User) error
 
 	// Teacher Management
 	CreateTeacher(ctx context.Context, user *User, instrumentIDs []int) (*User, error)
@@ -44,6 +45,9 @@ type AdminUseCase interface {
 }
 
 type AdminRepository interface {
+	// Self
+	UpdateAdmin(ctx context.Context, payload User) error
+
 	// Teacher Management
 	CreateTeacher(ctx context.Context, user *User, instrumentIDs []int) (*User, error)
 	GetAllTeachers(ctx context.Context) ([]User, error)

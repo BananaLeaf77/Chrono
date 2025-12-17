@@ -5,7 +5,6 @@ import (
 	"chronosphere/domain"
 	"chronosphere/middleware"
 	"chronosphere/utils"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -216,9 +215,6 @@ type ResendOTPRequest struct {
 func (h *AuthHandler) Me(c *gin.Context) {
 	uuidVal, existsUUID := c.Get("userUUID")
 	roleVal, existsRole := c.Get("role")
-	fmt.Println("userUUID:", uuidVal, "exists:", existsUUID)
-	fmt.Println("role:", roleVal, "exists:", existsRole)
-
 	if !existsUUID || !existsRole {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -292,6 +288,7 @@ type RegisterRequest struct {
 	Name     string `json:"name" binding:"required,min=3,max=50"`
 	Phone    string `json:"phone" binding:"required,min=10,max=14,numeric"`
 	Email    string `json:"email" binding:"required,email"`
+	Gender   string `json:"gender" binding:"required,oneof=male female"`
 	Password string `json:"password" binding:"required,min=8,max=64"`
 }
 
@@ -314,6 +311,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		req.Name,
 		req.Phone,
 		req.Password,
+		req.Gender,
 	); err != nil {
 		utils.PrintLogInfo(&req.Email, 409, "Register", &err)
 		c.JSON(http.StatusConflict, gin.H{
