@@ -19,21 +19,42 @@ func NewTeacherRepository(db *gorm.DB) domain.TeacherRepository {
 }
 
 func (r *teacherRepository) DeleteAvailabilityBasedOnDay(ctx context.Context, teacherUUID string, dayOfWeek string) error {
+	// Check if there are any booked classes on this day
+	var bookedCount int64
+	err := r.db.WithContext(ctx).
+		Model(&domain.Booking{}).
+		Joins("JOIN teacher_schedules ON bookings.schedule_id = teacher_schedules.id").
+		Where("teacher_schedules.teacher_uuid = ?", teacherUUID).
+		Where("teacher_schedules.day_of_week = ?", dayOfWeek).
+		Where("teacher_schedules.deleted_at IS NULL").
+		Where("bookings.status IN ?", []string{domain.StatusBooked, domain.StatusUpcoming}).
+		Count(&bookedCount).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to check booked classes: %w", err)
+	}
+
+	// If there are booked classes, prevent deletion
+	if bookedCount > 0 {
+		return fmt.Errorf("tidak dapat menghapus jadwal, terdapat %d kelas yang sudah dipesan atau akan datang pada hari ini", bookedCount)
+	}
+
+	// Soft delete the availability
 	result := r.db.WithContext(ctx).
+		Model(&domain.TeacherSchedule{}).
 		Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL", teacherUUID, dayOfWeek).
-		Delete(&domain.TeacherSchedule{})
+		Update("deleted_at", time.Now())
 
 	if result.Error != nil {
-		return fmt.Errorf("failed to delete availability: %w", result.Error)
+		return fmt.Errorf("gagal menghapus jadwal: %w", result.Error)
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("no availability found for the specified day")
+		return errors.New("tidak ada jadwal yang ditemukan untuk hari yang ditentukan")
 	}
 
 	return nil
 }
-
 func (r *teacherRepository) GetMyClassHistory(ctx context.Context, teacherUUID string) (*[]domain.ClassHistory, error) {
 	var histories []domain.ClassHistory
 
@@ -43,6 +64,8 @@ func (r *teacherRepository) GetMyClassHistory(ctx context.Context, teacherUUID s
 		Where("teacher_schedules.teacher_uuid = ?", teacherUUID). // Filter by teacher
 		Preload("Booking").
 		Preload("Booking.Schedule").
+		Preload("Booking.Schedule.Teacher").        // Preload teacher info (optional)
+		Preload("Booking.Schedule.TeacherProfile"). // Preload teacher profile (optional)
 		Preload("Booking.Student").
 		Preload("Booking.StudentPackage").
 		Preload("Booking.StudentPackage.Package").
@@ -155,16 +178,51 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		tx.Rollback()
 		remaining := classEnd.Sub(now).Round(time.Minute)
 
-		if is30MinPackage {
-			return fmt.Errorf("kelas 30 menit belum selesai. Tunggu %v menit lagi", remaining)
+		// Format remaining time for human readability
+		remainingHours := int(remaining.Hours())
+		remainingMinutes := int(remaining.Minutes()) % 60
+		remainingSeconds := int(remaining.Seconds()) % 60
+
+		var timeMsg string
+
+		if remainingHours > 0 {
+			if remainingMinutes > 0 {
+				timeMsg = fmt.Sprintf("%d jam %d menit", remainingHours, remainingMinutes)
+			} else {
+				timeMsg = fmt.Sprintf("%d jam", remainingHours)
+			}
+		} else if remainingMinutes > 0 {
+			if remainingSeconds > 0 {
+				timeMsg = fmt.Sprintf("%d menit %d detik", remainingMinutes, remainingSeconds)
+			} else {
+				timeMsg = fmt.Sprintf("%d menit", remainingMinutes)
+			}
+		} else {
+			timeMsg = fmt.Sprintf("%d detik", remainingSeconds)
 		}
-		return fmt.Errorf("kelas 60 menit belum selesai. Tunggu %v menit lagi", remaining)
+
+		// Format start and end times for better context
+		startFormatted := classStart.Format("15:04")
+		endFormatted := classEnd.Format("15:04")
+
+		var packageType string
+		if is30MinPackage {
+			packageType = "30 menit"
+		} else {
+			packageType = "60 menit"
+		}
+
+		return fmt.Errorf(
+			"Kelas %s belum dapat diselesaikan. Kelas berlangsung pukul %s - %s. Tunggu %s lagi hingga kelas berakhir",
+			packageType, startFormatted, endFormatted, timeMsg,
+		)
 	}
 
 	// 5️⃣ Check if class hasn't started yet (edge case)
 	if now.Before(classStart) {
 		tx.Rollback()
-		return errors.New("kelas belum dimulai")
+		startFormatted := classStart.Format("15:04")
+		return fmt.Errorf("Kelas belum dimulai. Kelas akan dimulai pukul %s", startFormatted)
 	}
 
 	// 6️⃣ Create ClassHistory

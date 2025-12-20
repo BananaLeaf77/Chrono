@@ -135,6 +135,7 @@ func (h *TeacherHandler) FinishClass(c *gin.Context) {
 
 	// ✅ Bind JSON body to DTO
 	var req dto.FinishClassRequest
+	req.BookingID = bookingID
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.PrintLogInfo(&name, http.StatusBadRequest, "FinishClass - BindJSON", &err)
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -146,7 +147,7 @@ func (h *TeacherHandler) FinishClass(c *gin.Context) {
 	}
 
 	// ✅ Map DTO → domain model (this now returns error)
-	payload, err := dto.MapFinishClassRequestToClassHistory(&req, bookingID, teacherUUID)
+	payload, err := dto.MapFinishClassRequestToClassHistory(&req, bookingID)
 	if err != nil {
 		utils.PrintLogInfo(&name, http.StatusBadRequest, "FinishClass - MapDTO", &err)
 		c.JSON(http.StatusBadRequest, gin.H{

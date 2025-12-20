@@ -2,9 +2,7 @@ package dto
 
 import (
 	"chronosphere/domain"
-	"fmt"
 	"strings"
-	"time"
 )
 
 type AddMultipleAvailabilityRequest struct {
@@ -73,34 +71,15 @@ func MapCreateTeacherRequestToUser(req *CreateTeacherRequest) *domain.User {
 	}
 }
 
+// Simplified request - teacher only needs to provide notes and optional photos
 type FinishClassRequest struct {
-	PackageID    *int     `json:"package_id,omitempty"`          // optional, only if class used a package
-	Date         string   `json:"date" binding:"required"`       // e.g. "2025-11-03"
-	StartTime    string   `json:"start_time" binding:"required"` // ✅ Changed to string
-	EndTime      string   `json:"end_time" binding:"required"`   // ✅ Changed to string
-	Notes        string   `json:"notes" binding:"required"`      // progress note from teacher (required)
-	DocumentURLs []string `json:"documentations,omitempty"`      // optional, list of uploaded file URLs
+	BookingID    int      `json:"booking_id" binding:"required,gt=0"`
+	Notes        string   `json:"notes" binding:"omitempty,max=2000"`
+	DocumentURLs []string `json:"documentations,omitempty" binding:"omitempty,dive,url"`
 }
 
 // ✅ Update mapper to handle string time conversion
-func MapFinishClassRequestToClassHistory(req *FinishClassRequest, bookingID int, teacherUUID string) (domain.ClassHistory, error) {
-	// Parse start time
-	startTime, err := time.Parse("15:04", req.StartTime)
-	if err != nil {
-		return domain.ClassHistory{}, fmt.Errorf("invalid start_time format, use HH:MM: %w", err)
-	}
-
-	// Parse end time
-	endTime, err := time.Parse("15:04", req.EndTime)
-	if err != nil {
-		return domain.ClassHistory{}, fmt.Errorf("invalid end_time format, use HH:MM: %w", err)
-	}
-
-	// ✅ Validate that it's exactly 1 hour
-	if endTime.Sub(startTime) != time.Hour {
-		return domain.ClassHistory{}, fmt.Errorf("class duration must be exactly 1 hour")
-	}
-
+func MapFinishClassRequestToClassHistory(req *FinishClassRequest, bookingID int) (domain.ClassHistory, error) {
 	history := domain.ClassHistory{
 		BookingID: bookingID,
 		Notes:     &req.Notes,

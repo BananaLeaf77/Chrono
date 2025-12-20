@@ -25,18 +25,18 @@ func (r *studentRepository) GetMyClassHistory(ctx context.Context, studentUUID s
 	var histories []domain.ClassHistory
 
 	err := r.db.WithContext(ctx).
-		Joins("JOIN bookings ON bookings.id = class_histories.booking_id").
-		Where("bookings.student_uuid = ?", studentUUID). // Filter by student
 		Preload("Booking").
 		Preload("Booking.Schedule").
 		Preload("Booking.Schedule.Teacher").
-		Preload("Booking.Schedule.Teacher.TeacherProfile.Instruments").
+		Preload("Booking.Schedule.TeacherProfile").
+		Preload("Booking.Schedule.TeacherProfile.Instruments").
+		Preload("Booking.Student").
 		Preload("Booking.StudentPackage").
 		Preload("Booking.StudentPackage.Package").
-		Preload("Booking.StudentPackage.Package.Instrument").
-		Preload("Booking.Student").
 		Preload("Documentations").
-		Order("class_histories.created_at DESC").
+		Joins("LEFT JOIN bookings ON class_histories.booking_id = bookings.id").
+		Where("bookings.student_uuid = ?", studentUUID). // Filter by student UUID
+		Order("bookings.class_date DESC").
 		Find(&histories).Error
 
 	if err != nil {
