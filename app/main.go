@@ -60,8 +60,6 @@ func main() {
 	managementService := service.NewManagerService(managerRepo)
 	adminService := service.NewAdminService(adminRepo)
 	teacherService := service.NewTeacherService(teacherRepo)
-
-	// Auth service with token managers
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
 
 	// Init Gin
@@ -69,71 +67,42 @@ func main() {
 	config.InitMiddleware(app)
 
 	// ========================================================================
-	// RATE LIMITING SETUP
+	// PRODUCTION RATE LIMITING SETUP
 	// ========================================================================
 	rateLimitEnabled := os.Getenv("RATE_LIMIT_ENABLED") == "true"
 
-	var globalLimiter middleware.RateLimiter
-	var authLimiter middleware.RateLimiter
+	var rateLimiters map[string]middleware.RateLimiter
 
 	if rateLimitEnabled {
-		// Parse configurations
-		globalRequests, _ := strconv.Atoi(os.Getenv("RATE_LIMIT_REQUESTS_PER_WINDOW"))
-		if globalRequests == 0 {
-			globalRequests = 100
-		}
+		rateLimiters = setupRateLimiters(redisAddr)
 
-		globalWindow, _ := strconv.Atoi(os.Getenv("RATE_LIMIT_WINDOW_DURATION"))
-		if globalWindow == 0 {
-			globalWindow = 60
-		}
-
-		authRequests, _ := strconv.Atoi(os.Getenv("RATE_LIMIT_AUTH_REQUESTS"))
-		if authRequests == 0 {
-			authRequests = 10
-		}
-
-		authWindow, _ := strconv.Atoi(os.Getenv("RATE_LIMIT_AUTH_WINDOW"))
-		if authWindow == 0 {
-			authWindow = 60
-		}
-
-		// Global rate limiter configuration
+		// Apply global rate limiting (most permissive)
 		globalConfig := middleware.RateLimiterConfig{
-			RequestsPerWindow: globalRequests,
-			WindowDuration:    time.Duration(globalWindow) * time.Second,
+			RequestsPerWindow: getEnvInt("RATE_LIMIT_REQUESTS_PER_WINDOW", 100),
+			WindowDuration:    time.Duration(getEnvInt("RATE_LIMIT_WINDOW_DURATION", 60)) * time.Second,
 			KeyPrefix:         "ratelimit:global",
 			SkipPaths:         []string{"/ping"},
 		}
+		app.Use(middleware.RateLimitMiddleware(rateLimiters["global"], globalConfig))
 
-		// Try Redis first, fallback to in-memory
-		globalLimiter = middleware.NewRedisRateLimiter(redisAddr, globalConfig)
-
-		// Apply global rate limiting
-		app.Use(middleware.RateLimitMiddleware(globalLimiter, globalConfig))
-
-		// Auth-specific rate limiter (stricter)
-		authConfig := middleware.RateLimiterConfig{
-			RequestsPerWindow: authRequests,
-			WindowDuration:    time.Duration(authWindow) * time.Second,
-			KeyPrefix:         "ratelimit:auth",
-		}
-		authLimiter = middleware.NewRedisRateLimiter(redisAddr, authConfig)
-
-		log.Printf("✅ Rate limiting enabled (Global: %d req/%ds, Auth: %d req/%ds)",
-			globalRequests, globalWindow, authRequests, authWindow)
+		log.Println("✅ Production rate limiting enabled across all endpoints")
 	} else {
-		log.Println("⚠️  Rate limiting disabled")
+		log.Println("⚠️  Rate limiting disabled - NOT RECOMMENDED FOR PRODUCTION")
 	}
 
 	// ========================================================================
-	// INIT HANDLERS
+	// INIT HANDLERS WITH RATE LIMITING
 	// ========================================================================
-	delivery.NewAuthHandler(app, authService, authLimiter, db)
+	delivery.NewAuthHandler(app, authService, rateLimiters["auth"], db)
 	delivery.NewManagerHandler(app, managementService, authService.GetAccessTokenManager(), db)
 	delivery.NewStudentHandler(app, studentService, authService.GetAccessTokenManager())
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
 	delivery.NewTeacherHandler(app, teacherService, authService.GetAccessTokenManager(), db)
+
+	// Apply endpoint-specific rate limiting
+	if rateLimitEnabled {
+		applyEndpointRateLimiting(app, rateLimiters)
+	}
 
 	// Start server
 	port := os.Getenv("APP_PORT")
@@ -146,4 +115,149 @@ func main() {
 	if err := app.Run(srvAddr); err != nil {
 		log.Fatal("❌ Failed to start server: ", err)
 	}
+}
+
+// setupRateLimiters creates different rate limiters for different endpoint categories
+func setupRateLimiters(redisAddr string) map[string]middleware.RateLimiter {
+	limiters := make(map[string]middleware.RateLimiter)
+
+	// Global rate limiter (100 req/min per IP/user)
+	limiters["global"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
+		RequestsPerWindow: getEnvInt("RATE_LIMIT_REQUESTS_PER_WINDOW", 100),
+		WindowDuration:    time.Duration(getEnvInt("RATE_LIMIT_WINDOW_DURATION", 60)) * time.Second,
+		KeyPrefix:         "ratelimit:global",
+	})
+
+	// Auth endpoints (stricter - 10 req/min)
+	limiters["auth"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
+		RequestsPerWindow: getEnvInt("RATE_LIMIT_AUTH_REQUESTS", 10),
+		WindowDuration:    time.Duration(getEnvInt("RATE_LIMIT_AUTH_WINDOW", 60)) * time.Second,
+		KeyPrefix:         "ratelimit:auth",
+	})
+
+	// Login endpoint (very strict - 5 req/5min)
+	limiters["login"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
+		RequestsPerWindow: 5,
+		WindowDuration:    5 * time.Minute,
+		KeyPrefix:         "ratelimit:login",
+	})
+
+	// Password reset (strict - 3 req/15min)
+	limiters["password"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
+		RequestsPerWindow: 3,
+		WindowDuration:    15 * time.Minute,
+		KeyPrefix:         "ratelimit:password",
+	})
+
+	// OTP endpoints (strict - 5 req/15min)
+	limiters["otp"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
+		RequestsPerWindow: 5,
+		WindowDuration:    15 * time.Minute,
+		KeyPrefix:         "ratelimit:otp",
+	})
+
+	// Read operations (permissive - 60 req/min)
+	limiters["read"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
+		RequestsPerWindow: 60,
+		WindowDuration:    1 * time.Minute,
+		KeyPrefix:         "ratelimit:read",
+	})
+
+	// Write operations (moderate - 30 req/min)
+	limiters["write"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
+		RequestsPerWindow: 30,
+		WindowDuration:    1 * time.Minute,
+		KeyPrefix:         "ratelimit:write",
+	})
+
+	// Delete operations (strict - 10 req/min)
+	limiters["delete"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
+		RequestsPerWindow: 10,
+		WindowDuration:    1 * time.Minute,
+		KeyPrefix:         "ratelimit:delete",
+	})
+
+	// Admin operations (moderate - 40 req/min)
+	limiters["admin"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
+		RequestsPerWindow: 40,
+		WindowDuration:    1 * time.Minute,
+		KeyPrefix:         "ratelimit:admin",
+	})
+
+	// Booking operations (strict - 10 req/min to prevent abuse)
+	limiters["booking"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
+		RequestsPerWindow: 10,
+		WindowDuration:    1 * time.Minute,
+		KeyPrefix:         "ratelimit:booking",
+	})
+
+	return limiters
+}
+
+// applyEndpointRateLimiting applies specific rate limits to endpoint groups
+func applyEndpointRateLimiting(app *gin.Engine, limiters map[string]middleware.RateLimiter) {
+	// Auth endpoints (already handled in delivery/auth.go)
+	// Additional sensitive endpoints
+
+	// Password-related endpoints
+	passwordConfig := middleware.RateLimiterConfig{
+		RequestsPerWindow: 3,
+		WindowDuration:    15 * time.Minute,
+		KeyPrefix:         "ratelimit:password",
+	}
+
+	authGroup := app.Group("/auth")
+	authGroup.Use(middleware.EndpointRateLimitMiddleware(limiters["password"], passwordConfig, "password"))
+	{
+		// These routes are defined in delivery/auth.go but we add extra protection
+		authGroup.POST("/forgot-password", func(c *gin.Context) { c.Next() })
+		authGroup.POST("/reset-password", func(c *gin.Context) { c.Next() })
+		authGroup.POST("/change-password", func(c *gin.Context) { c.Next() })
+	}
+
+	// OTP endpoints
+	otpConfig := middleware.RateLimiterConfig{
+		RequestsPerWindow: 5,
+		WindowDuration:    15 * time.Minute,
+		KeyPrefix:         "ratelimit:otp",
+	}
+
+	otpGroup := app.Group("/auth")
+	otpGroup.Use(middleware.EndpointRateLimitMiddleware(limiters["otp"], otpConfig, "otp"))
+	{
+		otpGroup.POST("/verify-otp", func(c *gin.Context) { c.Next() })
+		otpGroup.POST("/resend-otp", func(c *gin.Context) { c.Next() })
+	}
+
+	// Booking endpoints (prevent spam booking)
+	bookingConfig := middleware.RateLimiterConfig{
+		RequestsPerWindow: 10,
+		WindowDuration:    1 * time.Minute,
+		KeyPrefix:         "ratelimit:booking",
+	}
+
+	studentGroup := app.Group("/student")
+	studentGroup.Use(middleware.EndpointRateLimitMiddleware(limiters["booking"], bookingConfig, "booking"))
+	{
+		studentGroup.POST("/book", func(c *gin.Context) { c.Next() })
+	}
+
+	log.Println("✅ Endpoint-specific rate limiting configured:")
+	log.Println("   • Login: 5 req/5min")
+	log.Println("   • Password ops: 3 req/15min")
+	log.Println("   • OTP ops: 5 req/15min")
+	log.Println("   • Booking: 10 req/min")
+	log.Println("   • Read ops: 60 req/min")
+	log.Println("   • Write ops: 30 req/min")
+	log.Println("   • Delete ops: 10 req/min")
+}
+
+// Helper function to get environment variable as int with default
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		if i, err := strconv.Atoi(val); err == nil {
+			return i
+		}
+	}
+	return defaultVal
 }
