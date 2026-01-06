@@ -10,8 +10,9 @@ import (
 )
 
 // RegisterCustomValidations registers custom validation rules
-func RegisterCustomValidations(v *validator.Validate) {
+func RegisterCustomValidations(v *validator.Validate) error {
 	v.RegisterValidation("timeformat", validateTimeFormat)
+	return nil
 }
 
 // validateTimeFormat checks if string is valid HH:MM format

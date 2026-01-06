@@ -7,9 +7,13 @@ import (
 	"chronosphere/repository"
 	"chronosphere/service"
 	"chronosphere/utils"
+	"context"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -41,10 +45,13 @@ func main() {
 		redisAddr = "localhost:6379"
 	}
 
-	// JWT secret
+	// JWT secret validation
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		log.Fatal("❌ JWT_SECRET not found in .env")
+	}
+	if len(jwtSecret) < 32 {
+		log.Fatal("❌ JWT_SECRET must be at least 32 characters for security. Generate one with: openssl rand -base64 32")
 	}
 
 	// Init repositories
@@ -99,27 +106,60 @@ func main() {
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
 	delivery.NewTeacherHandler(app, teacherService, authService.GetAccessTokenManager(), db)
 
-	// Apply endpoint-specific rate limiting
-	if rateLimitEnabled {
-		applyEndpointRateLimiting(app, rateLimiters)
-	}
+	// ⚠️ REMOVED: applyEndpointRateLimiting(app, rateLimiters)
+	// Rate limiting is already applied in delivery/auth.go for each endpoint
 
-	// Start server
+	// ========================================================================
+	// GRACEFUL SHUTDOWN SETUP
+	// ========================================================================
 	port := os.Getenv("APP_PORT")
 	if port == "" {
 		port = "8080"
 	}
 	srvAddr := ":" + port
 
-	log.Printf("🚀 Server running at http://localhost%s", srvAddr)
-	if err := app.Run(srvAddr); err != nil {
-		log.Fatal("❌ Failed to start server: ", err)
+	// Create HTTP server with custom configuration
+	srv := &http.Server{
+		Addr:           srvAddr,
+		Handler:        app,
+		ReadTimeout:    15 * time.Second,
+		WriteTimeout:   15 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1MB
 	}
+
+	// Start server in a goroutine
+	go func() {
+		log.Printf("🚀 Server running at http://localhost%s", srvAddr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("❌ Server error: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("🛑 Shutting down server...")
+
+	// The context is used to inform the server it has 10 seconds to finish
+	// the request it is currently handling
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("⚠️  Server forced to shutdown: %v", err)
+	}
+
+	log.Println("✅ Server exited gracefully")
 }
 
-// setupRateLimiters creates different rate limiters for different endpoint categories
+// setupRateLimiters creates different rate limiters (reuses single Redis connection)
 func setupRateLimiters(redisAddr string) map[string]middleware.RateLimiter {
 	limiters := make(map[string]middleware.RateLimiter)
+
+	// All limiters now share the same Redis connection internally
 
 	// Global rate limiter (100 req/min per IP/user)
 	limiters["global"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
@@ -191,65 +231,8 @@ func setupRateLimiters(redisAddr string) map[string]middleware.RateLimiter {
 		KeyPrefix:         "ratelimit:booking",
 	})
 
+	log.Println("✅ Rate limiters configured (shared Redis connection)")
 	return limiters
-}
-
-// applyEndpointRateLimiting applies specific rate limits to endpoint groups
-func applyEndpointRateLimiting(app *gin.Engine, limiters map[string]middleware.RateLimiter) {
-	// Auth endpoints (already handled in delivery/auth.go)
-	// Additional sensitive endpoints
-
-	// Password-related endpoints
-	passwordConfig := middleware.RateLimiterConfig{
-		RequestsPerWindow: 3,
-		WindowDuration:    15 * time.Minute,
-		KeyPrefix:         "ratelimit:password",
-	}
-
-	authGroup := app.Group("/auth")
-	authGroup.Use(middleware.EndpointRateLimitMiddleware(limiters["password"], passwordConfig, "password"))
-	{
-		// These routes are defined in delivery/auth.go but we add extra protection
-		authGroup.POST("/forgot-password", func(c *gin.Context) { c.Next() })
-		authGroup.POST("/reset-password", func(c *gin.Context) { c.Next() })
-		authGroup.POST("/change-password", func(c *gin.Context) { c.Next() })
-	}
-
-	// OTP endpoints
-	otpConfig := middleware.RateLimiterConfig{
-		RequestsPerWindow: 5,
-		WindowDuration:    15 * time.Minute,
-		KeyPrefix:         "ratelimit:otp",
-	}
-
-	otpGroup := app.Group("/auth")
-	otpGroup.Use(middleware.EndpointRateLimitMiddleware(limiters["otp"], otpConfig, "otp"))
-	{
-		otpGroup.POST("/verify-otp", func(c *gin.Context) { c.Next() })
-		otpGroup.POST("/resend-otp", func(c *gin.Context) { c.Next() })
-	}
-
-	// Booking endpoints (prevent spam booking)
-	bookingConfig := middleware.RateLimiterConfig{
-		RequestsPerWindow: 10,
-		WindowDuration:    1 * time.Minute,
-		KeyPrefix:         "ratelimit:booking",
-	}
-
-	studentGroup := app.Group("/student")
-	studentGroup.Use(middleware.EndpointRateLimitMiddleware(limiters["booking"], bookingConfig, "booking"))
-	{
-		studentGroup.POST("/book", func(c *gin.Context) { c.Next() })
-	}
-
-	log.Println("✅ Endpoint-specific rate limiting configured:")
-	log.Println("   • Login: 5 req/5min")
-	log.Println("   • Password ops: 3 req/15min")
-	log.Println("   • OTP ops: 5 req/15min")
-	log.Println("   • Booking: 10 req/min")
-	log.Println("   • Read ops: 60 req/min")
-	log.Println("   • Write ops: 30 req/min")
-	log.Println("   • Delete ops: 10 req/min")
 }
 
 // Helper function to get environment variable as int with default

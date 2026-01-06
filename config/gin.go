@@ -3,6 +3,7 @@ package config
 import (
 	"chronosphere/utils"
 	"context"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -13,9 +14,22 @@ import (
 )
 
 func InitMiddleware(app *gin.Engine) {
-	// CORS Middleware
+	// ✅ Protect against panic in middleware setup
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("🔥 Middleware initialization panic recovered: %v", r)
+		}
+	}()
+
+	// CORS Middleware with safe defaults
+	corsOrigins := os.Getenv("ALLOW_ORIGINS")
+	if corsOrigins == "" {
+		corsOrigins = "http://localhost:3000"
+		log.Println("⚠️  ALLOW_ORIGINS not set, using default: http://localhost:3000")
+	}
+
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     strings.Split(os.Getenv("ALLOW_ORIGINS"), ","),
+		AllowOrigins:     strings.Split(corsOrigins, ","),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -23,45 +37,104 @@ func InitMiddleware(app *gin.Engine) {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Logging & Recovery
+	// Logging & Recovery (built-in Gin recovery)
 	app.Use(gin.Recovery())
 
 	// Security Headers
-	app.Use(func(c *gin.Context) {
+	app.Use(securityHeadersMiddleware())
+
+	// Timeout Middleware with error handling
+	app.Use(timeoutMiddleware(30 * time.Second))
+}
+
+// ✅ Security headers middleware with error protection
+func securityHeadersMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("🔥 Security headers panic recovered: %v", r)
+				c.Next()
+			}
+		}()
+
 		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
 		c.Writer.Header().Set("X-Frame-Options", "DENY")
 		c.Writer.Header().Set("X-XSS-Protection", "1; mode=block")
 		c.Writer.Header().Set("Content-Security-Policy", "default-src 'self'")
-		c.Writer.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+
+		// Only set HSTS in production with HTTPS
+		if os.Getenv("APP_ENV") == "production" {
+			c.Writer.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		}
+
 		c.Writer.Header().Set("Referrer-Policy", "no-referrer")
 		c.Next()
-	})
+	}
+}
 
-	// Timeout Middleware
-	app.Use(func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+// ✅ Timeout middleware with safe error handling
+func timeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("🔥 Timeout middleware panic recovered: %v", r)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"message": "Internal server error",
+					"error":   "server_error",
+				})
+				c.Abort()
+			}
+		}()
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
 		defer cancel()
 
 		c.Request = c.Request.WithContext(ctx)
 
-		done := make(chan struct{})
+		finished := make(chan struct{})
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("🔥 Request handler panic in timeout middleware: %v", r)
+				}
+			}()
+
 			c.Next()
-			close(done)
+			close(finished)
 		}()
 
 		select {
 		case <-ctx.Done():
-			c.JSON(http.StatusGatewayTimeout, gin.H{"error": "request timed out"})
-			c.Abort()
-		case <-done:
-			// selesai normal
+			if ctx.Err() == context.DeadlineExceeded {
+				c.JSON(http.StatusGatewayTimeout, gin.H{
+					"success": false,
+					"message": "Request timed out",
+					"error":   "timeout",
+				})
+				c.Abort()
+			}
+		case <-finished:
+			// Request completed normally
 		}
-	})
+	}
 }
 
 func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// ✅ Protect against panic
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("🔥 Auth middleware panic recovered: %v", r)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"message": "Authentication error",
+					"error":   "auth_error",
+				})
+				c.Abort()
+			}
+		}()
+
 		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -81,25 +154,33 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 			return
 		}
 
-		// Ambil token
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		userUUID, role, name, err := jwtManager.VerifyToken(tokenStr)
+
+		// ✅ Safe token verification
+		userUUID, role, name, err := func() (string, string, string, error) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("🔥 Token verification panic: %v", r)
+				}
+			}()
+			return jwtManager.VerifyToken(tokenStr)
+		}()
+
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"message": "Invalid or expired token",
-				"error":   err.Error(),
+				"error":   "invalid_token",
 			})
 			c.Abort()
 			return
 		}
 
-		// Simpan ke context
+		// Save to context
 		c.Set("userUUID", userUUID)
 		c.Set("role", role)
 		c.Set("name", name)
 
-		// Lanjut ke handler berikutnya
 		c.Next()
 	}
 }

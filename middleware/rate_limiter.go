@@ -28,37 +28,54 @@ type RateLimiter interface {
 	GetResetTime(ctx context.Context, key string) (time.Time, error)
 }
 
-// RedisRateLimiter implements rate limiting using Redis
+// RedisRateLimiter implements rate limiting using Redis with connection pooling
 type RedisRateLimiter struct {
 	client *redis.Client
 	config RateLimiterConfig
+	mu     sync.RWMutex
 }
 
-// NewRedisRateLimiter creates a new Redis-based rate limiter
-func NewRedisRateLimiter(redisAddr string, config RateLimiterConfig) *RedisRateLimiter {
-	client := redis.NewClient(&redis.Options{
-		Addr:         redisAddr,
-		DB:           0,
-		DialTimeout:  5 * time.Second,
-		ReadTimeout:  3 * time.Second,
-		WriteTimeout: 3 * time.Second,
-		PoolSize:     10,
-		MinIdleConns: 5,
+// Global Redis client pool (shared across all rate limiters)
+var (
+	redisClient     *redis.Client
+	redisClientOnce sync.Once
+	redisClientErr  error
+)
+
+// initRedisClient initializes a single Redis client for all rate limiters
+func initRedisClient(redisAddr string) (*redis.Client, error) {
+	redisClientOnce.Do(func() {
+		redisClient = redis.NewClient(&redis.Options{
+			Addr:         redisAddr,
+			DB:           0,
+			DialTimeout:  5 * time.Second,
+			ReadTimeout:  3 * time.Second,
+			WriteTimeout: 3 * time.Second,
+			PoolSize:     20, // Increased pool size
+			MinIdleConns: 10, // More idle connections
+			MaxRetries:   3,  // Retry failed commands
+		})
+
+		// Test connection
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := redisClient.Ping(ctx).Err(); err != nil {
+			redisClientErr = err
+			log.Printf("⚠️  Redis connection failed: %v", err)
+			redisClient = nil
+		} else {
+			log.Println("✅ Redis rate limiter connected (shared client)")
+		}
 	})
 
-	// Test connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	return redisClient, redisClientErr
+}
 
-	if err := client.Ping(ctx).Err(); err != nil {
-		log.Printf("⚠️  Redis connection failed, falling back to in-memory rate limiter: %v", err)
-		return &RedisRateLimiter{
-			client: nil, // Will trigger fallback
-			config: config,
-		}
-	}
+// NewRedisRateLimiter creates a new Redis-based rate limiter (reuses connection)
+func NewRedisRateLimiter(redisAddr string, config RateLimiterConfig) *RedisRateLimiter {
+	client, _ := initRedisClient(redisAddr)
 
-	log.Println("✅ Redis rate limiter connected successfully")
 	return &RedisRateLimiter{
 		client: client,
 		config: config,
@@ -73,25 +90,27 @@ func (r *RedisRateLimiter) Allow(ctx context.Context, key string) (bool, error) 
 
 	fullKey := fmt.Sprintf("%s:%s", r.config.KeyPrefix, key)
 
-	// Lua script for atomic increment and expiry
+	// Optimized Lua script with PEXPIRE for millisecond precision
 	script := `
 		local current = redis.call('GET', KEYS[1])
+		local ttl = redis.call('PTTL', KEYS[1])
+		
 		if current == false then
-			redis.call('SET', KEYS[1], 1, 'EX', ARGV[1])
-			return 1
+			redis.call('SET', KEYS[1], 1, 'PX', ARGV[1])
+			return {1, ARGV[1]}
 		end
 		
 		local count = tonumber(current)
 		if count < tonumber(ARGV[2]) then
 			redis.call('INCR', KEYS[1])
-			return count + 1
+			return {count + 1, ttl}
 		end
 		
-		return -1
+		return {-1, ttl}
 	`
 
 	result, err := r.client.Eval(ctx, script, []string{fullKey},
-		int(r.config.WindowDuration.Seconds()),
+		int(r.config.WindowDuration.Milliseconds()),
 		r.config.RequestsPerWindow).Result()
 
 	if err != nil {
@@ -99,7 +118,9 @@ func (r *RedisRateLimiter) Allow(ctx context.Context, key string) (bool, error) 
 		return true, nil // Fail open: allow request if Redis errors
 	}
 
-	count := result.(int64)
+	resultSlice := result.([]interface{})
+	count := resultSlice[0].(int64)
+
 	return count != -1, nil
 }
 
@@ -136,7 +157,7 @@ func (r *RedisRateLimiter) GetResetTime(ctx context.Context, key string) (time.T
 
 	fullKey := fmt.Sprintf("%s:%s", r.config.KeyPrefix, key)
 
-	ttl, err := r.client.TTL(ctx, fullKey).Result()
+	ttl, err := r.client.PTTL(ctx, fullKey).Result()
 	if err != nil || ttl < 0 {
 		return time.Now().Add(r.config.WindowDuration), nil
 	}
