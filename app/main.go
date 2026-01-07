@@ -3,7 +3,6 @@ package main
 import (
 	"chronosphere/config"
 	"chronosphere/delivery"
-	"chronosphere/middleware"
 	"chronosphere/repository"
 	"chronosphere/service"
 	"chronosphere/utils"
@@ -74,33 +73,9 @@ func main() {
 	config.InitMiddleware(app)
 
 	// ========================================================================
-	// PRODUCTION RATE LIMITING SETUP
+	// INIT HANDLERS
 	// ========================================================================
-	rateLimitEnabled := os.Getenv("RATE_LIMIT_ENABLED") == "true"
-
-	var rateLimiters map[string]middleware.RateLimiter
-
-	if rateLimitEnabled {
-		rateLimiters = setupRateLimiters(redisAddr)
-
-		// Apply global rate limiting (most permissive)
-		globalConfig := middleware.RateLimiterConfig{
-			RequestsPerWindow: getEnvInt("RATE_LIMIT_REQUESTS_PER_WINDOW", 100),
-			WindowDuration:    time.Duration(getEnvInt("RATE_LIMIT_WINDOW_DURATION", 60)) * time.Second,
-			KeyPrefix:         "ratelimit:global",
-			SkipPaths:         []string{"/ping"},
-		}
-		app.Use(middleware.RateLimitMiddleware(rateLimiters["global"], globalConfig))
-
-		log.Println("✅ Production rate limiting enabled across all endpoints")
-	} else {
-		log.Println("⚠️  Rate limiting disabled - NOT RECOMMENDED FOR PRODUCTION")
-	}
-
-	// ========================================================================
-	// INIT HANDLERS WITH RATE LIMITING
-	// ========================================================================
-	delivery.NewAuthHandler(app, authService, rateLimiters["auth"], db)
+	delivery.NewAuthHandler(app, authService, db)
 	delivery.NewManagerHandler(app, managementService, authService.GetAccessTokenManager(), db)
 	delivery.NewStudentHandler(app, studentService, authService.GetAccessTokenManager())
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
@@ -153,86 +128,6 @@ func main() {
 	}
 
 	log.Println("✅ Server exited gracefully")
-}
-
-// setupRateLimiters creates different rate limiters (reuses single Redis connection)
-func setupRateLimiters(redisAddr string) map[string]middleware.RateLimiter {
-	limiters := make(map[string]middleware.RateLimiter)
-
-	// All limiters now share the same Redis connection internally
-
-	// Global rate limiter (100 req/min per IP/user)
-	limiters["global"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
-		RequestsPerWindow: getEnvInt("RATE_LIMIT_REQUESTS_PER_WINDOW", 100),
-		WindowDuration:    time.Duration(getEnvInt("RATE_LIMIT_WINDOW_DURATION", 60)) * time.Second,
-		KeyPrefix:         "ratelimit:global",
-	})
-
-	// Auth endpoints (stricter - 10 req/min)
-	limiters["auth"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
-		RequestsPerWindow: getEnvInt("RATE_LIMIT_AUTH_REQUESTS", 10),
-		WindowDuration:    time.Duration(getEnvInt("RATE_LIMIT_AUTH_WINDOW", 60)) * time.Second,
-		KeyPrefix:         "ratelimit:auth",
-	})
-
-	// Login endpoint (very strict - 5 req/5min)
-	limiters["login"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
-		RequestsPerWindow: 5,
-		WindowDuration:    5 * time.Minute,
-		KeyPrefix:         "ratelimit:login",
-	})
-
-	// Password reset (strict - 3 req/15min)
-	limiters["password"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
-		RequestsPerWindow: 3,
-		WindowDuration:    15 * time.Minute,
-		KeyPrefix:         "ratelimit:password",
-	})
-
-	// OTP endpoints (strict - 5 req/15min)
-	limiters["otp"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
-		RequestsPerWindow: 5,
-		WindowDuration:    15 * time.Minute,
-		KeyPrefix:         "ratelimit:otp",
-	})
-
-	// Read operations (permissive - 60 req/min)
-	limiters["read"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
-		RequestsPerWindow: 60,
-		WindowDuration:    1 * time.Minute,
-		KeyPrefix:         "ratelimit:read",
-	})
-
-	// Write operations (moderate - 30 req/min)
-	limiters["write"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
-		RequestsPerWindow: 30,
-		WindowDuration:    1 * time.Minute,
-		KeyPrefix:         "ratelimit:write",
-	})
-
-	// Delete operations (strict - 10 req/min)
-	limiters["delete"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
-		RequestsPerWindow: 10,
-		WindowDuration:    1 * time.Minute,
-		KeyPrefix:         "ratelimit:delete",
-	})
-
-	// Admin operations (moderate - 40 req/min)
-	limiters["admin"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
-		RequestsPerWindow: 40,
-		WindowDuration:    1 * time.Minute,
-		KeyPrefix:         "ratelimit:admin",
-	})
-
-	// Booking operations (strict - 10 req/min to prevent abuse)
-	limiters["booking"] = middleware.NewRedisRateLimiter(redisAddr, middleware.RateLimiterConfig{
-		RequestsPerWindow: 10,
-		WindowDuration:    1 * time.Minute,
-		KeyPrefix:         "ratelimit:booking",
-	})
-
-	log.Println("✅ Rate limiters configured (shared Redis connection)")
-	return limiters
 }
 
 // Helper function to get environment variable as int with default

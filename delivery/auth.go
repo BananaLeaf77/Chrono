@@ -7,7 +7,6 @@ import (
 	"chronosphere/utils"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -17,7 +16,7 @@ type AuthHandler struct {
 	authUC domain.AuthUseCase
 }
 
-func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase, authLimiter middleware.RateLimiter, db *gorm.DB) {
+func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase, db *gorm.DB) {
 	handler := &AuthHandler{authUC: authUC}
 
 	// Ping Route (no rate limiting)
@@ -29,27 +28,10 @@ func NewAuthHandler(r *gin.Engine, authUC domain.AuthUseCase, authLimiter middle
 
 	// Public routes with stricter rate limiting for auth
 	public := r.Group("/auth")
-	if authLimiter != nil {
-		authConfig := middleware.RateLimiterConfig{
-			RequestsPerWindow: 10,
-			WindowDuration:    1 * time.Minute,
-			KeyPrefix:         "ratelimit:auth",
-		}
-		public.Use(middleware.EndpointRateLimitMiddleware(authLimiter, authConfig, "auth"))
-	}
 	{
 		public.POST("/register", handler.Register)
 		public.POST("/verify-otp", handler.VerifyOTP)
-		// Login configured with rate limiting
 		loginRateLimiter := r.Group("/auth")
-		if authLimiter != nil {
-			loginConfig := middleware.RateLimiterConfig{
-				RequestsPerWindow: 5,
-				WindowDuration:    5 * time.Minute,
-				KeyPrefix:         "ratelimit:login",
-			}
-			loginRateLimiter.Use(middleware.EndpointRateLimitMiddleware(authLimiter, loginConfig, "login"))
-		}
 		loginRateLimiter.POST("/login", handler.Login)
 		public.POST("/forgot-password", handler.ForgotPassword)
 		public.POST("/reset-password", handler.ResetPassword)
