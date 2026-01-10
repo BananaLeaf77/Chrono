@@ -44,6 +44,10 @@ func main() {
 		redisAddr = "localhost:6379"
 	}
 
+	redisPass := os.Getenv("REDIS_PASSWORD")
+	if redisPass == "" {
+		log.Fatal("❌ Failed to fetch Redis password from env")
+	}
 	// JWT secret validation
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
@@ -59,7 +63,7 @@ func main() {
 	teacherRepo := repository.NewTeacherRepository(db)
 	managerRepo := repository.NewManagerRepository(db)
 	adminRepo := repository.NewAdminRepository(db)
-	otpRepo := repository.NewOTPRedisRepository(redisAddr, "", 0)
+	otpRepo := repository.NewOTPRedisRepository(redisAddr, redisPass, 0)
 
 	// Init services
 	studentService := service.NewStudentUseCase(studentRepo)

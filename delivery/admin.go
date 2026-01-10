@@ -495,12 +495,13 @@ func (h *AdminHandler) GetManagerByUUID(c *gin.Context) {
 
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	uuid := c.Param("uuid")
+	name := utils.GetAPIHitter(c)
 	if err := h.uc.DeleteUser(c.Request.Context(), uuid); err != nil {
-		utils.PrintLogInfo(&uuid, 500, "Turn Off - UseCase", &err)
+		utils.PrintLogInfo(&name, 500, "Turn Off - UseCase", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to turn off user"})
 		return
 	}
-	utils.PrintLogInfo(&uuid, 200, "Turn Off", nil)
+	utils.PrintLogInfo(&name, 200, "Turn Off", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User turned off successfully"})
 }
 
