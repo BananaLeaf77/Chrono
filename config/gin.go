@@ -1,6 +1,7 @@
 package config
 
 import (
+	"chronosphere/middleware"
 	"chronosphere/utils"
 	"context"
 	"log"
@@ -45,6 +46,9 @@ func InitMiddleware(app *gin.Engine) {
 
 	// Timeout Middleware with error handling
 	app.Use(timeoutMiddleware(30 * time.Second))
+
+	app.Use(middleware.RateLimiter())
+
 }
 
 // ✅ Security headers middleware with error protection

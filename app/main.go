@@ -3,6 +3,7 @@ package main
 import (
 	"chronosphere/config"
 	"chronosphere/delivery"
+	"chronosphere/middleware"
 	"chronosphere/repository"
 	"chronosphere/service"
 	"chronosphere/utils"
@@ -48,6 +49,8 @@ func main() {
 	if redisPass == "" {
 		log.Fatal("❌ Failed to fetch Redis password from env")
 	}
+
+	redisClient := config.InitRedisDB(redisAddr, redisPass, 0)
 	// JWT secret validation
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
@@ -63,7 +66,7 @@ func main() {
 	teacherRepo := repository.NewTeacherRepository(db)
 	managerRepo := repository.NewManagerRepository(db)
 	adminRepo := repository.NewAdminRepository(db)
-	otpRepo := repository.NewOTPRedisRepository(redisAddr, redisPass, 0)
+	otpRepo := repository.NewOTPRedisRepository(redisClient)
 
 	// Init services
 	studentService := service.NewStudentUseCase(studentRepo)
@@ -71,6 +74,9 @@ func main() {
 	adminService := service.NewAdminService(adminRepo)
 	teacherService := service.NewTeacherService(teacherRepo)
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
+
+	middleware.InitRateLimiter(redisClient)
+	middleware.CleanupExpiredRateLimits()
 
 	// Init Gin
 	app := gin.Default()

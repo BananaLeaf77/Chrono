@@ -14,18 +14,8 @@ type otpRedisRepository struct {
 	client *redis.Client
 }
 
-func NewOTPRedisRepository(addr, password string, db int) domain.OTPRepository {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: password,
-		DB:       db,
-	})
-
-	// Test connection
-	if _, err := rdb.Ping(context.Background()).Result(); err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
-	}
-	return &otpRedisRepository{client: rdb}
+func NewOTPRedisRepository(redisClient *redis.Client) domain.OTPRepository {
+	return &otpRedisRepository{client: redisClient}
 }
 
 func (r *otpRedisRepository) SaveOTP(ctx context.Context, email, otp, hashedPassword, name, phone, gender string, ttl time.Duration) error {
