@@ -75,8 +75,8 @@ func main() {
 	teacherService := service.NewTeacherService(teacherRepo)
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
 
+	// RATE LIMITER
 	middleware.InitRateLimiter(redisClient)
-	middleware.CleanupExpiredRateLimits()
 
 	// Init Gin
 	app := gin.Default()

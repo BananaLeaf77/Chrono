@@ -31,6 +31,12 @@ type RateLimitConfig struct {
 var rateLimitRules = map[string]RateLimitConfig{
 	// ==================== AUTHENTICATION ENDPOINTS ====================
 	// These are high-risk for brute force attacks
+	"ping": {
+		MaxRequests: 5,
+		Window:      time.Minute,
+		Algorithm:   "sliding_window",
+		Scope:       "ip",
+	},
 	"auth_register": {
 		MaxRequests: 3, // 3 registrations per hour from same IP
 		Window:      time.Hour,
@@ -40,6 +46,12 @@ var rateLimitRules = map[string]RateLimitConfig{
 	"auth_login": {
 		MaxRequests: 10, // 10 login attempts per 15 minutes
 		Window:      15 * time.Minute,
+		Algorithm:   "sliding_window",
+		Scope:       "ip",
+	},
+	"auth_me": {
+		MaxRequests: 50,
+		Window:      time.Minute,
 		Algorithm:   "sliding_window",
 		Scope:       "ip",
 	},
@@ -221,8 +233,12 @@ func getRateLimitRule(path, method string) RateLimitConfig {
 	// Authentication endpoints
 	case strings.Contains(path, "/auth/register"):
 		return rateLimitRules["auth_register"]
+	case strings.Contains(path, "/ping"):
+		return rateLimitRules["ping"]
 	case strings.Contains(path, "/auth/login"):
 		return rateLimitRules["auth_login"]
+	case strings.Contains(path, "/auth/me"):
+		return rateLimitRules["auth_me"]
 	case strings.Contains(path, "/auth/verify-otp"):
 		return rateLimitRules["auth_verify_otp"]
 	case strings.Contains(path, "/auth/forgot-password"):
@@ -474,12 +490,6 @@ func tokenBucketRateLimit(key string, config RateLimitConfig) (bool, int, error)
 // Main Rate Limiter Middleware
 func RateLimiter() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Skip rate limiting for health checks
-		if c.Request.URL.Path == "/ping" || c.Request.URL.Path == "/health" {
-			c.Next()
-			return
-		}
-
 		// Get rate limit rule for this endpoint
 		rule := getRateLimitRule(c.Request.URL.Path, c.Request.Method)
 
