@@ -91,9 +91,6 @@ func main() {
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
 	delivery.NewTeacherHandler(app, teacherService, authService.GetAccessTokenManager(), db)
 
-	// ⚠️ REMOVED: applyEndpointRateLimiting(app, rateLimiters)
-	// Rate limiting is already applied in delivery/auth.go for each endpoint
-
 	// ========================================================================
 	// GRACEFUL SHUTDOWN SETUP
 	// ========================================================================
