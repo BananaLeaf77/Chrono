@@ -41,7 +41,7 @@ func main() {
 	// Redis config
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
-		redisAddr = "localhost:6379"
+		log.Fatal("❌ Failed to fetch Redis address from env")
 	}
 
 	redisPass := os.Getenv("REDIS_PASSWORD")

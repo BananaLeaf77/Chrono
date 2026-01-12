@@ -20,6 +20,11 @@ func NewOTPRedisRepository(addr, password string, db int) domain.OTPRepository {
 		Password: password,
 		DB:       db,
 	})
+
+	// Test connection
+	if _, err := rdb.Ping(context.Background()).Result(); err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
 	return &otpRedisRepository{client: rdb}
 }
 
