@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -547,14 +548,24 @@ func RateLimiter() gin.HandlerFunc {
 			c.Header("X-RateLimit-Reset", fmt.Sprintf("%d",
 				time.Now().Add(rule.Window).Unix()))
 
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": fmt.Sprintf("Rate limit exceeded. Maximum %d requests per %v",
-					rule.MaxRequests, rule.Window),
-				"code":        "RATE_LIMIT_EXCEEDED",
-				"retry_after": int(rule.Window.Seconds()),
-				"limit":       rule.MaxRequests,
-				"window":      rule.Window.String(),
-			})
+			if os.Getenv("APP_API_RETURN_LANG") == "IDN" {
+				c.JSON(http.StatusTooManyRequests, gin.H{
+					"error":       fmt.Sprintf("Permintaan terlalu sering, harap coba lagi dalam %v", rule.Window.String()),
+					"code":        "RATE_LIMIT_EXCEEDED",
+					"retry_after": int(rule.Window.Seconds()),
+					"limit":       rule.MaxRequests,
+					"window":      rule.Window.String(),
+				})
+			} else {
+				c.JSON(http.StatusTooManyRequests, gin.H{
+					"error":       fmt.Sprintf("Too many requests, please try again in %v", rule.Window.String()),
+					"code":        "RATE_LIMIT_EXCEEDED",
+					"retry_after": int(rule.Window.Seconds()),
+					"limit":       rule.MaxRequests,
+					"window":      rule.Window.String(),
+				})
+			}
+
 			c.Abort()
 			return
 		}
