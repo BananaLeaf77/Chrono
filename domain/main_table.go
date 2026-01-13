@@ -17,6 +17,11 @@ const (
 
 	GenderMale   = "male"
 	GenderFemale = "female"
+
+	RoomFull      = "Ruangan instrumen penuh"
+	RoomAvailable = "Ruangan nstrumen tersedia"
+
+	PaketTidakSesuai = "Paket tidak tersedia"
 )
 
 type User struct {
@@ -97,6 +102,10 @@ type TeacherSchedule struct {
 
 	// ✅ Add computed field for next class date
 	NextClassDate *time.Time `gorm:"-" json:"next_class_date,omitempty"`
+
+	// Availability depends on user 1 hour package or 30 minute package
+	IsAvailableForPackageDuration *string `json:"-"`
+	IsAvailableForRoomSlot        *string `json:"-"`
 }
 
 type Booking struct {

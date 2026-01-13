@@ -82,33 +82,36 @@ func (r *teacherRepository) GetMyClassHistory(ctx context.Context, teacherUUID s
 }
 
 func (r *teacherRepository) AddAvailability(ctx context.Context, schedules *[]domain.TeacherSchedule) error {
-	// ✅ Check for overlaps BEFORE inserting
-	for _, schedule := range *schedules {
-		var count int64
-		err := r.db.WithContext(ctx).
-			Model(&domain.TeacherSchedule{}).
-			Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL", schedule.TeacherUUID, schedule.DayOfWeek).
-			Where(`
-				(start_time, end_time) OVERLAPS (?, ?)
-			`, schedule.StartTime, schedule.EndTime).
-			Count(&count).Error
-		if err != nil {
-			return fmt.Errorf("failed to check overlap: %w", err)
-		}
-		if count > 0 {
-			return fmt.Errorf("slot waktu %s %s-%s konflik dengan jadwal yang sudah ada",
-				schedule.DayOfWeek,
-				schedule.StartTime.Format("15:04"),
-				schedule.EndTime.Format("15:04"))
-		}
-	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, schedule := range *schedules {
+			var count int64
+			// Gunakan casting ::time secara eksplisit untuk PostgreSQL
+			err := tx.Model(&domain.TeacherSchedule{}).
+				Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL",
+					schedule.TeacherUUID, schedule.DayOfWeek).
+				Where("(start_time, end_time) OVERLAPS (?::time, ?::time)",
+					schedule.StartTime.Format("15:04"),
+					schedule.EndTime.Format("15:04")).
+				Count(&count).Error
 
-	// ✅ If no conflicts, insert all schedules
-	if err := r.db.WithContext(ctx).Create(schedules).Error; err != nil {
-		return fmt.Errorf("failed to add schedule: %w", err)
-	}
+			if err != nil {
+				return fmt.Errorf("failed to check overlap: %w", err)
+			}
+			if count > 0 {
+				return fmt.Errorf("slot waktu %s pukul %s - %s WITA sudah terdaftar atau bertabrakan",
+					schedule.DayOfWeek,
+					schedule.StartTime.Format("15:04"),
+					schedule.EndTime.Format("15:04"))
+			}
+		}
 
-	return nil
+		// Batch Insert
+		if err := tx.Create(schedules).Error; err != nil {
+			return fmt.Errorf("failed to add schedule: %w", err)
+		}
+
+		return nil
+	})
 }
 
 func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teacherUUID string, payload domain.ClassHistory) error {

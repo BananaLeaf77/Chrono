@@ -374,7 +374,7 @@ func (r *studentRepository) GetAvailableSchedules(ctx context.Context, studentUU
 		return nil, fmt.Errorf("student belum memiliki paket apapun")
 	}
 
-	// 2️⃣ Get active packages and collect instrument IDs
+	// 2️⃣ Get active packages, available quota and collect instrument IDs
 	now := time.Now()
 	instrumentIDs := make(map[int]bool)
 	hasActivePackage := false

@@ -374,14 +374,14 @@ func (h *TeacherHandler) convertToTeacherSchedules(teacherUUID string, slots []d
 			return nil, fmt.Errorf("invalid end_time format '%s'", slotGroup.EndTime)
 		}
 
-		// ✅ STRICT: Validate exactly 1-hour duration
-		if endTime.Sub(startTime) != time.Hour {
-			return nil, fmt.Errorf("time slot must be exactly 1 hour, got %s - %s", slotGroup.StartTime, slotGroup.EndTime)
+		// ✅ STRICT: Validate exactly 1-hour duration / 30 minute
+		if endTime.Sub(startTime) != time.Hour && endTime.Sub(startTime) != 30*time.Minute {
+			return nil, fmt.Errorf("slot waktu harus 1 jam atau 30 menit, didapat %s - %s", slotGroup.StartTime, slotGroup.EndTime)
 		}
 
-		// ✅ Validate business hours (7:00 - 22:00)
-		if startTime.Hour() < 7 || endTime.Hour() > 22 {
-			return nil, fmt.Errorf("time slot %s - %s must be between 07:00 and 22:00", slotGroup.StartTime, slotGroup.EndTime)
+		// ✅ Validate business hours (7:00 - 21:00)
+		if startTime.Hour() < 7 || endTime.Hour() > 21 {
+			return nil, fmt.Errorf("slot waktu %s - %s harus antara 07:00 dan 21:00", slotGroup.StartTime, slotGroup.EndTime)
 		}
 
 		// Create schedules for each day in the group
