@@ -175,7 +175,6 @@ func (h *StudentHandler) BookClass(c *gin.Context) {
 
 func (h *StudentHandler) GetAvailableSchedules(c *gin.Context) {
 	name := utils.GetAPIHitter(c)
-
 	userUUID, exists := c.Get("userUUID")
 	if !exists {
 		utils.PrintLogInfo(&name, 401, "GetAvailableSchedules", nil)

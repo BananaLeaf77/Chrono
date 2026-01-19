@@ -128,11 +128,12 @@ type CreatePackageRequest struct {
 	InstrumentID int     `json:"instrument_id" binding:"required,gt=0"`
 }
 type UpdatePackageRequest struct {
-	Name         string `json:"name,omitempty" binding:"omitempty,min=3,max=50"`
-	Duration     int    `json:"duration" binding:"required,oneof=30 60"`
-	Quota        int    `json:"quota,omitempty" binding:"omitempty,gt=0"`
-	Description  string `json:"description,omitempty"`
-	InstrumentID int    `json:"instrument_id,omitempty" binding:"required,gt=0"`
+	Name         string  `json:"name,omitempty" binding:"omitempty,min=3,max=50"`
+	Duration     int     `json:"duration" binding:"required,oneof=30 60"`
+	Quota        int     `json:"quota,omitempty" binding:"omitempty,gt=0"`
+	Description  string  `json:"description,omitempty"`
+	InstrumentID int     `json:"instrument_id,omitempty" binding:"required,gt=0"`
+	Price        float64 `json:"price,omitempty" binding:"omitempty,gt=0"`
 }
 
 type CreateInstrumentRequest struct {
@@ -247,6 +248,7 @@ func (h *AdminHandler) UpdatePackage(c *gin.Context) {
 	pkg.Duration = req.Duration
 	pkg.InstrumentID = req.InstrumentID
 	pkg.Description = req.Description
+	pkg.Price = req.Price
 
 	if err := h.uc.UpdatePackage(c.Request.Context(), pkg); err != nil {
 		utils.PrintLogInfo(&name, 500, "UpdatePackage - UseCase", &err)

@@ -82,36 +82,55 @@ func (r *teacherRepository) GetMyClassHistory(ctx context.Context, teacherUUID s
 }
 
 func (r *teacherRepository) AddAvailability(ctx context.Context, schedules *[]domain.TeacherSchedule) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, schedule := range *schedules {
-			var count int64
-			// Gunakan casting ::time secara eksplisit untuk PostgreSQL
-			err := tx.Model(&domain.TeacherSchedule{}).
-				Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL",
-					schedule.TeacherUUID, schedule.DayOfWeek).
-				Where("(start_time, end_time) OVERLAPS (?::time, ?::time)",
-					schedule.StartTime.Format("15:04"),
-					schedule.EndTime.Format("15:04")).
-				Count(&count).Error
+	// Start a transaction
+	tx := r.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to begin transaction: %w", tx.Error)
+	}
 
-			if err != nil {
-				return fmt.Errorf("failed to check overlap: %w", err)
-			}
-			if count > 0 {
-				return fmt.Errorf("slot waktu %s pukul %s - %s WITA sudah terdaftar atau bertabrakan",
-					schedule.DayOfWeek,
-					schedule.StartTime.Format("15:04"),
-					schedule.EndTime.Format("15:04"))
-			}
+	// Defer rollback in case of error
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
 		}
+	}()
 
-		// Batch Insert
-		if err := tx.Create(schedules).Error; err != nil {
-			return fmt.Errorf("failed to add schedule: %w", err)
+	// ✅ Check for overlaps BEFORE inserting within the transaction
+	for _, schedule := range *schedules {
+		var count int64
+		err := tx.
+			Model(&domain.TeacherSchedule{}).
+			Where("teacher_uuid = ? AND day_of_week = ? AND deleted_at IS NULL", schedule.TeacherUUID, schedule.DayOfWeek).
+			Where(`
+                (start_time, end_time) OVERLAPS (?, ?)
+            `, schedule.StartTime, schedule.EndTime).
+			Count(&count).Error
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to check overlap: %w", err)
 		}
+		if count > 0 {
+			tx.Rollback()
+			return fmt.Errorf("slot waktu %s %s-%s konflik dengan jadwal yang sudah ada",
+				schedule.DayOfWeek,
+				schedule.StartTime.Format("15:04"),
+				schedule.EndTime.Format("15:04"))
+		}
+	}
 
-		return nil
-	})
+	// ✅ If no conflicts, insert all schedules within the transaction
+	if err := tx.Create(schedules).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to add schedule: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }
 
 func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teacherUUID string, payload domain.ClassHistory) error {

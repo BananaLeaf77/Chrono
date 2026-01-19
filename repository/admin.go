@@ -531,7 +531,7 @@ func (r *adminRepo) GetAllStudents(ctx context.Context) ([]domain.User, error) {
 func (r *adminRepo) GetStudentByUUID(ctx context.Context, uuid string) (*domain.User, error) {
 	var student domain.User
 	err := r.db.WithContext(ctx).
-		Preload("StudentProfile.Packages", "end_date >= ?", time.Now()).
+		Preload("StudentProfile.Packages", "end_date >= ? AND remaining_quota > 0", time.Now()).
 		Preload("StudentProfile.Packages.Package.Instrument").
 		Where("uuid = ? AND role = ? AND deleted_at IS NULL", uuid, domain.RoleStudent).
 		First(&student).Error

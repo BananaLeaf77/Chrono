@@ -22,6 +22,9 @@ const (
 	RoomAvailable = "Ruangan nstrumen tersedia"
 
 	PaketTidakSesuai = "Paket tidak tersedia"
+
+	RegularRoomLimit int64 = 8
+	DrumRoomLimit    int64 = 3
 )
 
 type User struct {
@@ -92,6 +95,7 @@ type TeacherSchedule struct {
 	DayOfWeek   string     `gorm:"size:10;not null" json:"day_of_week"`
 	StartTime   time.Time  `gorm:"type:time;not null" json:"start_time"`
 	EndTime     time.Time  `gorm:"type:time;not null" json:"end_time"`
+	Duration    int        `gorm:"not null;default:0" json:"duration"`
 	IsBooked    bool       `gorm:"default:false" json:"is_booked"`
 	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
@@ -103,9 +107,10 @@ type TeacherSchedule struct {
 	// ✅ Add computed field for next class date
 	NextClassDate *time.Time `gorm:"-" json:"next_class_date,omitempty"`
 
-	// Availability depends on user 1 hour package or 30 minute package
-	IsAvailableForPackageDuration *string `json:"-"`
-	IsAvailableForRoomSlot        *string `json:"-"`
+	// Availability flags
+	IsDurationCompatible *bool `gorm:"-" json:"is_duration_compatible,omitempty"` // Student's package duration matches
+	IsRoomAvailable      *bool `gorm:"-" json:"is_room_available,omitempty"`      // Room slot available
+	IsFullyAvailable     *bool `gorm:"-" json:"is_fully_available,omitempty"`     // Both conditions met
 }
 
 type Booking struct {

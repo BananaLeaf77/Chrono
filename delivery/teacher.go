@@ -362,6 +362,10 @@ func (h *TeacherHandler) convertToTeacherSchedules(teacherUUID string, slots []d
 	var schedules []domain.TeacherSchedule
 	uniqueSlots := make(map[string]bool)
 
+	// Define business hour boundaries (7:00 - 22:00)
+	businessStart := time.Date(0, 1, 1, 7, 0, 0, 0, time.UTC) // 07:00
+	businessEnd := time.Date(0, 1, 1, 22, 0, 0, 0, time.UTC)  // 22:00
+
 	for _, slotGroup := range slots {
 		// Parse times once per slot group
 		startTime, err := time.Parse("15:04", slotGroup.StartTime)
@@ -374,14 +378,32 @@ func (h *TeacherHandler) convertToTeacherSchedules(teacherUUID string, slots []d
 			return nil, fmt.Errorf("invalid end_time format '%s'", slotGroup.EndTime)
 		}
 
+		// Calculate duration in minutes
+		durationMinutes := int(endTime.Sub(startTime).Minutes())
+
 		// ✅ STRICT: Validate exactly 1-hour duration / 30 minute
-		if endTime.Sub(startTime) != time.Hour && endTime.Sub(startTime) != 30*time.Minute {
-			return nil, fmt.Errorf("slot waktu harus 1 jam atau 30 menit, didapat %s - %s", slotGroup.StartTime, slotGroup.EndTime)
+		if durationMinutes != 60 && durationMinutes != 30 {
+			return nil, fmt.Errorf("slot waktu harus 1 jam atau 30 menit, didapat %s - %s (durasi: %d menit)",
+				slotGroup.StartTime, slotGroup.EndTime, durationMinutes)
 		}
 
-		// ✅ Validate business hours (7:00 - 21:00)
-		if startTime.Hour() < 7 || endTime.Hour() > 21 {
-			return nil, fmt.Errorf("slot waktu %s - %s harus antara 07:00 dan 21:00", slotGroup.StartTime, slotGroup.EndTime)
+		// ✅ Validate business hours (7:00 - 22:00) - STRICTLY
+		// Normalize to same date for comparison
+		startNormalized := time.Date(0, 1, 1, startTime.Hour(), startTime.Minute(), 0, 0, time.UTC)
+		endNormalized := time.Date(0, 1, 1, endTime.Hour(), endTime.Minute(), 0, 0, time.UTC)
+
+		// Check if slot is within business hours
+		if startNormalized.Before(businessStart) || startNormalized.After(businessEnd) {
+			return nil, fmt.Errorf("waktu mulai %s harus antara 07:00 dan 22:00", slotGroup.StartTime)
+		}
+
+		if endNormalized.Before(businessStart) || endNormalized.After(businessEnd) {
+			return nil, fmt.Errorf("waktu selesai %s harus antara 07:00 dan 22:00", slotGroup.EndTime)
+		}
+
+		// Additional check: end time should not exceed 22:00
+		if endNormalized.Hour() == 22 && endNormalized.Minute() > 0 {
+			return nil, fmt.Errorf("waktu selesai %s melebihi batas maksimum 22:00", slotGroup.EndTime)
 		}
 
 		// Create schedules for each day in the group
@@ -389,12 +411,12 @@ func (h *TeacherHandler) convertToTeacherSchedules(teacherUUID string, slots []d
 			// Check for duplicate slots in the request
 			slotKey := fmt.Sprintf("%s-%s-%s", day, slotGroup.StartTime, slotGroup.EndTime)
 			if uniqueSlots[slotKey] {
-				return nil, fmt.Errorf("duplicate time slot: %s %s-%s", day, slotGroup.StartTime, slotGroup.EndTime)
+				return nil, fmt.Errorf("slot waktu yang sama tidak boleh ada, didapat %s %s-%s", day, slotGroup.StartTime, slotGroup.EndTime)
 			}
 			uniqueSlots[slotKey] = true
 
 			// Convert day to title case (e.g., "senin" -> "Senin")
-			dayTitleCase := cases.Title(language.Indonesian).String(day)
+			dayTitleCase := cases.Title(language.Indonesian).String(strings.ToLower(day))
 
 			// Create domain schedule
 			schedule := domain.TeacherSchedule{
@@ -405,6 +427,7 @@ func (h *TeacherHandler) convertToTeacherSchedules(teacherUUID string, slots []d
 				IsBooked:    false,
 				CreatedAt:   time.Now(),
 				UpdatedAt:   time.Now(),
+				Duration:    durationMinutes,
 			}
 
 			schedules = append(schedules, schedule)

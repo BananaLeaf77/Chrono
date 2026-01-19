@@ -26,4 +26,8 @@ type StudentRepository interface {
 	CancelBookedClass(ctx context.Context, bookingID int, studentUUID string, reason *string) error
 	GetAvailableSchedules(ctx context.Context, studentUUID string) (*[]TeacherSchedule, error)
 	GetMyClassHistory(ctx context.Context, studentUUID string) (*[]ClassHistory, error)
+
+
+	// Classify
+	GetTeacherSchedulesBasedOnInstrumentIDs(ctx context.Context, instrumentIDs []int) (*[]TeacherSchedule, error)
 }

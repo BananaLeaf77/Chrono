@@ -169,6 +169,10 @@ func (r *studentRepository) BookClass(
 		}
 	}()
 
+	// get all the booked schedule on the same day to make sure room is still available
+	regularRoomLimit := domain.RegularRoomLimit
+	drumRoomLimit := domain.DrumRoomLimit
+
 	// 1️⃣ Verify and get the student package
 	var studentPackage domain.StudentPackage
 	err := tx.Preload("Package.Instrument").
@@ -193,6 +197,36 @@ func (r *studentRepository) BookClass(
 	if studentPackage.RemainingQuota <= 0 {
 		tx.Rollback()
 		return errors.New("kuota paket sudah habis, silakan perpanjang atau beli paket baru")
+	}
+
+	if studentPackage.Package.Instrument.Name == "Drum" {
+		// check the booking time if theres 3 drum class booked then return error
+		var drumBookings int64
+		err = tx.Model(&domain.Booking{}).
+			Where("status = ? AND class_date >= ?", domain.StatusBooked, now).
+			Count(&drumBookings).Error
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal memeriksa booking drum: %w", err)
+		}
+		if drumBookings >= drumRoomLimit {
+			tx.Rollback()
+			return errors.New("gedung kelas sudah penuh pada jam ini, mohon booking di jam lain")
+		}
+	} else {
+		// check the booking time if theres 8 regular class booked then return error
+		var regularBookings int64
+		err = tx.Model(&domain.Booking{}).
+			Where("status = ? AND class_date >= ?", domain.StatusBooked, now).
+			Count(&regularBookings).Error
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("gagal memeriksa booking regular: %w", err)
+		}
+		if regularBookings >= regularRoomLimit {
+			tx.Rollback()
+			return errors.New("gedung kelas sudah penuh pada jam ini, mohon booking di jam lain")
+		}
 	}
 
 	// 3️⃣ Get schedule with teacher profile and instruments
@@ -350,15 +384,41 @@ func (r *studentRepository) GetStudentInstrumentIDs(ctx context.Context, student
 		Select("packages.instrument_id").
 		Joins("JOIN packages ON packages.id = student_packages.package_id").
 		Where("student_packages.student_uuid = ?", studentUUID).
-		Where("student_packages.end_date >= ?", time.Now()).
+		Where("student_packages.end_date >= ? AND student_packages.remaining_quota > 0", time.Now()).
 		Scan(&ids).Error
 	return ids, err
 }
 
+func (r *studentRepository) GetTeacherSchedulesBasedOnInstrumentIDs(ctx context.Context, instrumentIDs []int) (*[]domain.TeacherSchedule, error) {
+	var schedules []domain.TeacherSchedule
+	err := r.db.WithContext(ctx).
+		Distinct("teacher_schedules.*").
+		Table("teacher_schedules").
+		Joins("JOIN teacher_profiles ON teacher_profiles.user_uuid = teacher_schedules.teacher_uuid").
+		Joins("JOIN teacher_instruments ON teacher_instruments.teacher_profile_user_uuid = teacher_profiles.user_uuid").
+		Joins("JOIN users ON users.uuid = teacher_schedules.teacher_uuid").
+		Where("teacher_instruments.instrument_id IN ?", instrumentIDs).
+		Where("teacher_schedules.deleted_at IS NULL").
+		Where("users.deleted_at IS NULL").
+		Preload("Teacher").
+		Preload("TeacherProfile.Instruments").
+		Order("teacher_schedules.day_of_week ASC, teacher_schedules.start_time ASC").
+		Find(&schedules).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengambil jadwal: %w", err)
+	}
+
+	return &schedules, nil
+}
+
 func (r *studentRepository) GetAvailableSchedules(ctx context.Context, studentUUID string) (*[]domain.TeacherSchedule, error) {
-	// 1️⃣ Get student with packages
+	// ────────────────────────────────────────────────
+	// 1. Get student + active packages + instruments
+	// ────────────────────────────────────────────────
 	var student domain.User
 	err := r.db.WithContext(ctx).
+		Preload("StudentProfile.Packages", "end_date >= ? AND remaining_quota > 0", time.Now()).
 		Preload("StudentProfile.Packages.Package.Instrument").
 		Where("uuid = ? AND role = ? AND deleted_at IS NULL", studentUUID, domain.RoleStudent).
 		First(&student).Error
@@ -370,46 +430,47 @@ func (r *studentRepository) GetAvailableSchedules(ctx context.Context, studentUU
 		return nil, fmt.Errorf("gagal mengambil data student: %w", err)
 	}
 
-	if student.StudentProfile == nil {
-		return nil, fmt.Errorf("student belum memiliki paket apapun")
+	if student.StudentProfile == nil || len(student.StudentProfile.Packages) == 0 {
+		return &[]domain.TeacherSchedule{}, nil
 	}
 
-	// 2️⃣ Get active packages, available quota and collect instrument IDs
-	now := time.Now()
-	instrumentIDs := make(map[int]bool)
-	hasActivePackage := false
+	// 2. Map valid instruments and durations from student packages
+	// Map: InstrumentID -> Map[DurationInMinutes] -> true
+	validPackages := make(map[int]map[int]bool)
+	var validInstrumentIDs []int
 
 	for _, sp := range student.StudentProfile.Packages {
-		isActive := sp.RemainingQuota > 0 && sp.EndDate.After(now)
-		if isActive && sp.Package != nil {
-			instrumentIDs[sp.Package.InstrumentID] = true
-			hasActivePackage = true
+		if sp.Package == nil {
+			continue
 		}
+
+		instID := sp.Package.InstrumentID
+		duration := sp.Package.Duration // e.g., 30 or 60
+
+		_, exists := validPackages[instID]
+		if !exists {
+			validPackages[instID] = make(map[int]bool)
+			validInstrumentIDs = append(validInstrumentIDs, instID)
+		}
+		validPackages[instID][duration] = true
 	}
 
-	if !hasActivePackage {
-		return &[]domain.TeacherSchedule{}, nil // Return empty array, not error
+	if len(validInstrumentIDs) == 0 {
+		return &[]domain.TeacherSchedule{}, nil
 	}
 
-	// Convert map to slice
-	var instrumentIDSlice []int
-	for id := range instrumentIDs {
-		instrumentIDSlice = append(instrumentIDSlice, id)
-	}
-
-	// 3️⃣ Get available schedules matching student's instruments
+	// ────────────────────────────────────────────────
+	// 3. Fetch candidate schedules
+	// ────────────────────────────────────────────────
 	var schedules []domain.TeacherSchedule
 	err = r.db.WithContext(ctx).
 		Distinct("teacher_schedules.*").
 		Table("teacher_schedules").
 		Joins("JOIN teacher_profiles ON teacher_profiles.user_uuid = teacher_schedules.teacher_uuid").
 		Joins("JOIN teacher_instruments ON teacher_instruments.teacher_profile_user_uuid = teacher_profiles.user_uuid").
-		// Add JOIN with users table to check if teacher is not deleted
 		Joins("JOIN users ON users.uuid = teacher_schedules.teacher_uuid").
-		Where("teacher_instruments.instrument_id IN ?", instrumentIDSlice).
-		Where("teacher_schedules.is_booked = ?", false).
+		Where("teacher_instruments.instrument_id IN ?", validInstrumentIDs).
 		Where("teacher_schedules.deleted_at IS NULL").
-		// Ensure teacher user is not soft-deleted
 		Where("users.deleted_at IS NULL").
 		Preload("Teacher").
 		Preload("TeacherProfile.Instruments").
@@ -417,16 +478,92 @@ func (r *studentRepository) GetAvailableSchedules(ctx context.Context, studentUU
 		Find(&schedules).Error
 
 	if err != nil {
-		return nil, fmt.Errorf("gagal mengambil jadwal guru: %w", err)
+		return nil, fmt.Errorf("gagal mengambil jadwal: %w", err)
 	}
 
-	// 4️⃣ Add next class date to each schedule
-	for i := range schedules {
-		nextDate := utils.GetNextClassDate(schedules[i].DayOfWeek, schedules[i].StartTime)
-		schedules[i].NextClassDate = &nextDate
+	// ────────────────────────────────────────────────
+	// 4. Enrich & Filter Schedules
+	// ────────────────────────────────────────────────
+	var availableSchedules []domain.TeacherSchedule
+
+	for i, v := range schedules {
+		sch := &schedules[i]
+
+		// A. Construct next class date
+		next := utils.GetNextClassDate(sch.DayOfWeek, sch.StartTime)
+		sch.NextClassDate = &next
+
+		// B. Check Duration Compatibility
+		scheduleDuration := v.Duration
+
+		isCompatible := false
+
+		isDrumTarget := false
+
+		// Check compatibility based on instrument AND duration
+		for _, teacherInst := range sch.TeacherProfile.Instruments {
+			// Check if student has a package for this instrument
+			if durMap, ok := validPackages[teacherInst.ID]; ok {
+				// Check if duration matches
+				if durMap[scheduleDuration] {
+					isCompatible = true
+				}
+
+				// Identify instrument type for room check
+				if strings.EqualFold(teacherInst.Name, "drum") || strings.EqualFold(teacherInst.Name, "drums") {
+					isDrumTarget = true
+				}
+			}
+		}
+
+		// ✅ CHANGED: Do NOT continue/skip if incompatible. Just flag it.
+		sch.IsDurationCompatible = ptrBool(isCompatible)
+
+		// C. Check Room Availability
+		var bookingCount int64
+		query := r.db.WithContext(ctx).Model(&domain.Booking{}).
+			Joins("JOIN teacher_schedules ts ON ts.id = bookings.schedule_id").
+			Joins("JOIN student_packages sp ON sp.id = bookings.student_package_id").
+			Joins("JOIN packages p ON p.id = sp.package_id").
+			Joins("JOIN instruments i ON i.id = p.instrument_id").
+			Where("bookings.status IN ?", []string{domain.StatusBooked, domain.StatusRescheduled}).
+			Where("bookings.class_date = ?", next).
+			Where("ts.start_time = ?", sch.StartTime)
+
+		if isDrumTarget {
+			query = query.Where("i.name ILIKE ?", "drum%")
+		} else {
+			query = query.Where("NOT (i.name ILIKE ?)", "drum%")
+		}
+
+		if err := query.Count(&bookingCount).Error; err != nil {
+			fmt.Printf("Error checking room availability: %v\n", err)
+			sch.IsRoomAvailable = ptrBool(false)
+		} else {
+			limit := domain.RegularRoomLimit
+			if isDrumTarget {
+				limit = domain.DrumRoomLimit
+			}
+			sch.IsRoomAvailable = ptrBool(bookingCount < limit)
+		}
+
+		// D. Fully Available
+		// Logic: Room available + Duration Compatible + Teacher Not Booked
+		// (User might want to see schedule even if teacher IS booked, but filtered earlier? No, user removed "is_booked=false" query filter in STEP 78/103 user code?)
+		// Wait, user's pasted code in STEP 103 DOES NOT include `Where("teacher_schedules.is_booked = ?", false)`.
+		// So we must handle `sch.IsBooked` here.
+
+		fully := *sch.IsRoomAvailable && *sch.IsDurationCompatible && !sch.IsBooked
+		sch.IsFullyAvailable = ptrBool(fully)
+
+		availableSchedules = append(availableSchedules, *sch)
 	}
 
-	return &schedules, nil
+	return &availableSchedules, nil
+}
+
+func ptrBool(v bool) *bool {
+	return &v
 }
 
 func (r *studentRepository) GetAllAvailablePackages(ctx context.Context) (*[]domain.Package, error) {
@@ -440,7 +577,7 @@ func (r *studentRepository) GetAllAvailablePackages(ctx context.Context) (*[]dom
 func (r *studentRepository) GetMyProfile(ctx context.Context, userUUID string) (*domain.User, error) {
 	var student domain.User
 	err := r.db.WithContext(ctx).
-		Preload("StudentProfile.Packages", "end_date >= ?", time.Now()).
+		Preload("StudentProfile.Packages", "end_date >= ? AND remaining_quota > 0", time.Now()).
 		Preload("StudentProfile.Packages.Package.Instrument").
 		Where("uuid = ? AND role = ? AND deleted_at IS NULL", userUUID, domain.RoleStudent).
 		First(&student).Error

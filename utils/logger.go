@@ -10,6 +10,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func PrintPretty(data interface{}) {
+    // MarshalIndent membuat format JSON dengan spasi (indentasi)
+    prettyJSON, err := json.MarshalIndent(data, "", "    ")
+    if err != nil {
+        fmt.Println("Gagal mencetak struct:", err)
+        return
+    }
+    fmt.Println(string(prettyJSON))
+}
+
 func PrintLogInfo(username *string, statusCode int, functionName string, err *error) {
 	var logColor string
 
