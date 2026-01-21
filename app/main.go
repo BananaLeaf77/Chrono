@@ -3,7 +3,6 @@ package main
 import (
 	"chronosphere/config"
 	"chronosphere/delivery"
-	"chronosphere/middleware"
 	"chronosphere/repository"
 	"chronosphere/service"
 	"chronosphere/utils"
@@ -76,7 +75,7 @@ func main() {
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
 
 	// RATE LIMITER
-	middleware.InitRateLimiter(redisClient)
+	// middleware.InitRateLimiter(redisClient)
 
 	// Init Gin
 	app := gin.Default()
