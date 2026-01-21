@@ -25,7 +25,7 @@ func NewStudentHandler(r *gin.Engine, studUC domain.StudentUseCase, jwtManager *
 	student.Use(config.AuthMiddleware(jwtManager), middleware.StudentAndAdminOnly())
 	{
 		student.GET("/profile", handler.GetMyProfile)
-		student.POST("/book", handler.BookClass)
+		student.POST("/book/", handler.BookClass)
 		student.GET("/booked", handler.GetMyBookedClasses)
 		student.GET("/classes", handler.GetAvailableSchedules)
 		student.PUT("/modify", handler.UpdateStudentData)
@@ -155,7 +155,7 @@ func (h *StudentHandler) BookClass(c *gin.Context) {
 		return
 	}
 
-	err := h.studUC.BookClass(c.Request.Context(), userUUID.(string), payload.ScheduleID, payload.PackageID)
+	err := h.studUC.BookClass(c.Request.Context(), userUUID.(string), payload.ScheduleID, payload.InstrumentID)
 	if err != nil {
 		utils.PrintLogInfo(&name, 500, "BookClass", &err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -228,7 +228,7 @@ func (h *StudentHandler) GetMyBookedClasses(c *gin.Context) {
 		})
 		return
 	}
-
+		
 	utils.PrintLogInfo(&name, 200, "GetMyBookedClasses", nil)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

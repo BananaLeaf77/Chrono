@@ -128,8 +128,9 @@ func (r *adminRepo) GetAllClassHistories(ctx context.Context) (*[]domain.ClassHi
 		Preload("Booking.Schedule.TeacherProfile").
 		Preload("Booking.Schedule.TeacherProfile.Instruments").
 		Preload("Booking.Student").
-		Preload("Booking.StudentPackage").
-		Preload("Booking.StudentPackage.Package").
+		Preload("Booking.PackageUsed").
+		Preload("Booking.PackageUsed.Package").
+		Preload("Booking.PackageUsed.Package.Instrument").
 		Preload("Documentations").
 		Joins("LEFT JOIN bookings ON class_histories.booking_id = bookings.id"). // Join untuk akses class_date
 		Order("bookings.class_date DESC").                                       // Sort by actual class date

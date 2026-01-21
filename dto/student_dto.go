@@ -22,7 +22,7 @@ func MapUpdateStudentRequestByStudent(req *UpdateStudentDataRequest) domain.User
 
 type BookClassRequest struct {
 	ScheduleID int `json:"schedule_id" binding:"required,min=1"`
-	PackageID  int `json:"package_id" binding:"required,min=1"`
+	InstrumentID  int `json:"instrument_id" binding:"required,min=1"`
 }
 
 type CancelBookingRequest struct {

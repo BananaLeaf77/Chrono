@@ -114,23 +114,22 @@ type TeacherSchedule struct {
 }
 
 type Booking struct {
-	ID               int        `gorm:"primaryKey" json:"id"`
-	StudentUUID      string     `gorm:"type:uuid;not null" json:"student_uuid"`
-	ScheduleID       int        `gorm:"not null" json:"schedule_id"`
-	StudentPackageID int        `gorm:"not null" json:"student_package_id"` // ✅ Added this field
-	ClassDate        time.Time  `gorm:"not null" json:"class_date"`         // ✅ Add this field
-	Status           string     `gorm:"size:20;default:'booked'" json:"status"`
-	BookedAt         time.Time  `gorm:"autoCreateTime" json:"booked_at"`
-	CompletedAt      *time.Time `json:"completed_at,omitempty"`
-	RescheduledAt    *time.Time `json:"rescheduled_at,omitempty"`
-	CancelledAt      *time.Time `json:"cancelled_at,omitempty"`
-	CanceledBy       *string    `gorm:"type:uuid" json:"canceled_by,omitempty"`
-	CancelUser       *User      `gorm:"foreignKey:CanceledBy;references:UUID" json:"cancel_user,omitempty"`
-	Notes            *string    `json:"notes,omitempty"`
-
-	Schedule       TeacherSchedule `gorm:"foreignKey:ScheduleID" json:"schedule"`
-	Student        User            `gorm:"foreignKey:StudentUUID;references:UUID" json:"student"`
-	StudentPackage StudentPackage  `gorm:"foreignKey:StudentPackageID" json:"student_package"` // ✅ Added relationship
+	ID               int             `gorm:"primaryKey" json:"id"`
+	StudentUUID      string          `gorm:"type:uuid;not null" json:"student_uuid"`
+	Student          User            `gorm:"foreignKey:StudentUUID;references:UUID" json:"student"`
+	ScheduleID       int             `gorm:"not null" json:"schedule_id"`
+	Schedule         TeacherSchedule `gorm:"foreignKey:ScheduleID" json:"schedule"`
+	StudentPackageID int             `gorm:"not null" json:"student_package_id"`              // ✅ Added this field
+	PackageUsed      StudentPackage  `gorm:"foreignKey:StudentPackageID" json:"package_used"` // ✅ Added relationship
+	ClassDate        time.Time       `gorm:"not null" json:"class_date"`                      // ✅ Add this field
+	Status           string          `gorm:"size:20;default:'booked'" json:"status"`
+	BookedAt         time.Time       `gorm:"autoCreateTime" json:"booked_at"`
+	CompletedAt      *time.Time      `json:"completed_at,omitempty"`
+	RescheduledAt    *time.Time      `json:"rescheduled_at,omitempty"`
+	CancelledAt      *time.Time      `json:"cancelled_at,omitempty"`
+	CanceledBy       *string         `gorm:"type:uuid" json:"canceled_by,omitempty"`
+	CancelUser       *User           `gorm:"foreignKey:CanceledBy;references:UUID" json:"cancel_user,omitempty"`
+	Notes            *string         `json:"notes,omitempty"`
 
 	IsReadyToFinish bool `gorm:"-" json:"is_ready_to_finish"`
 }

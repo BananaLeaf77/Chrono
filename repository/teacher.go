@@ -67,9 +67,9 @@ func (r *teacherRepository) GetMyClassHistory(ctx context.Context, teacherUUID s
 		Preload("Booking.Schedule.Teacher").        // Preload teacher info (optional)
 		Preload("Booking.Schedule.TeacherProfile"). // Preload teacher profile (optional)
 		Preload("Booking.Student").
-		Preload("Booking.StudentPackage").
-		Preload("Booking.StudentPackage.Package").
-		Preload("Booking.StudentPackage.Package.Instrument").
+		Preload("Booking.PackageUsed").
+		Preload("Booking.PackageUsed.Package").
+		Preload("Booking.PackageUsed.Package.Instrument").
 		Preload("Documentations").
 		Order("class_histories.created_at DESC").
 		Find(&histories).Error
@@ -175,8 +175,8 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 	var classEnd time.Time
 	is30MinPackage := false
 
-	if booking.StudentPackage.Package != nil {
-		is30MinPackage = booking.StudentPackage.Package.Duration == 30
+	if booking.PackageUsed.Package != nil {
+		is30MinPackage = booking.PackageUsed.Package.Duration == 30
 	}
 
 	if is30MinPackage {
@@ -481,10 +481,11 @@ func (r *teacherRepository) GetAllBookedClass(ctx context.Context, teacherUUID s
 
 	err := r.db.WithContext(ctx).
 		Preload("Student").
+		Preload("PackageUsed").
+		Preload("PackageUsed.Package").
+		Preload("PackageUsed.Package.Instrument").
 		Preload("Schedule").
 		Preload("Schedule.Teacher").
-		Preload("StudentPackage").
-		Preload("StudentPackage.Package").
 		Where("schedule_id IN (SELECT id FROM teacher_schedules WHERE teacher_uuid = ? AND deleted_at IS NULL)", teacherUUID).
 		Where("status = ?", domain.StatusBooked).
 		Find(&bookings).Error
@@ -512,8 +513,8 @@ func (r *teacherRepository) GetAllBookedClass(ctx context.Context, teacherUUID s
 
 		// Check if 30-minute package
 		is30MinPackage := false
-		if bookings[i].StudentPackage.Package != nil {
-			is30MinPackage = bookings[i].StudentPackage.Package.Duration == 30
+		if bookings[i].PackageUsed.Package != nil {
+			is30MinPackage = bookings[i].PackageUsed.Package.Duration == 30
 		}
 
 		switch {
