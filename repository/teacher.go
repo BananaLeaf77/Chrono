@@ -101,8 +101,8 @@ func (r *teacherRepository) AddAvailability(ctx context.Context, schedules *[]do
 		var count int64
 
 		// Parse the times to compare properly
-		startTimeStr := schedule.StartTime.Format("15:04:05")
-		endTimeStr := schedule.EndTime.Format("15:04:05")
+		startTimeStr := schedule.StartTime
+		endTimeStr := schedule.EndTime
 
 		err := tx.
 			Model(&domain.TeacherSchedule{}).
@@ -119,9 +119,9 @@ func (r *teacherRepository) AddAvailability(ctx context.Context, schedules *[]do
 		}
 		if count > 0 {
 			// Format times for display in WITA (UTC+8)
-			loc, _ := time.LoadLocation("Asia/Makassar")
-			startWITA := schedule.StartTime.In(loc).Format("15:04")
-			endWITA := schedule.EndTime.In(loc).Format("15:04")
+			// loc, _ := time.LoadLocation("Asia/Makassar")
+			startWITA := schedule.StartTime
+			endWITA := schedule.EndTime
 
 			tx.Rollback()
 			return fmt.Errorf("slot waktu %s %s-%s konflik dengan jadwal yang sudah ada",
@@ -174,12 +174,24 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 	}
 
 	// 3️⃣ Calculate class times based on package duration
-	startTime := booking.Schedule.StartTime
-	scheduleEndTime := booking.Schedule.EndTime // This is always 1 hour later
+	startTimeStr := booking.Schedule.StartTime
+	endTimeStr := booking.Schedule.EndTime // This is always 1 hour later (or 30 mins)
+
+	// Parse string HH:MM
+	parsedStart, err := time.Parse("15:04", startTimeStr)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("format waktu mulai tidak valid: %v", err)
+	}
+	parsedEnd, err := time.Parse("15:04", endTimeStr)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("format waktu selesai tidak valid: %v", err)
+	}
 
 	classStart := time.Date(
 		booking.ClassDate.Year(), booking.ClassDate.Month(), booking.ClassDate.Day(),
-		startTime.Hour(), startTime.Minute(), startTime.Second(), 0,
+		parsedStart.Hour(), parsedStart.Minute(), parsedStart.Second(), 0,
 		booking.ClassDate.Location(),
 	)
 
@@ -198,7 +210,7 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		// 60-min package: class ends at schedule end time
 		classEnd = time.Date(
 			booking.ClassDate.Year(), booking.ClassDate.Month(), booking.ClassDate.Day(),
-			scheduleEndTime.Hour(), scheduleEndTime.Minute(), scheduleEndTime.Second(), 0,
+			parsedEnd.Hour(), parsedEnd.Minute(), parsedEnd.Second(), 0,
 			booking.ClassDate.Location(),
 		)
 	}
@@ -509,18 +521,27 @@ func (r *teacherRepository) GetAllBookedClass(ctx context.Context, teacherUUID s
 	now := time.Now()
 	for i := range bookings {
 		// Combine ClassDate with Schedule time components
-		startTime := bookings[i].Schedule.StartTime
+		startTimeStr := bookings[i].Schedule.StartTime
+		endTimeStr := bookings[i].Schedule.EndTime
 		classDate := bookings[i].ClassDate
+
+		// Parse "HH:MM"
+		parsedStart, _ := time.Parse("15:04", startTimeStr) // Ignore error as stored data should be valid
+		parsedEnd, _ := time.Parse("15:04", endTimeStr)
 
 		// Create actual datetime by combining date from ClassDate with time from Schedule
 		classStart := time.Date(
 			classDate.Year(), classDate.Month(), classDate.Day(),
-			startTime.Hour(), startTime.Minute(), startTime.Second(), startTime.Nanosecond(),
-			startTime.Location(),
+			parsedStart.Hour(), parsedStart.Minute(), 0, 0,
+			classDate.Location(), // Use ClassDate location
 		)
 
 		// Calculate end time
-		duration := bookings[i].Schedule.EndTime.Sub(startTime)
+		// Using parsed times for duration calculation
+		duration := parsedEnd.Sub(parsedStart)
+		// Or use struct Duration if trusted. Duration field is in minutes.
+		// duration := time.Duration(bookings[i].Schedule.Duration) * time.Minute
+
 		classEnd := classStart.Add(duration)
 
 		// Check if 30-minute package

@@ -239,7 +239,9 @@ func (r *studentRepository) BookClass(
 		strings.EqualFold(studentPackage.Package.Instrument.Name, "Drums")
 
 	// Calculate class date
-	classDate := utils.GetNextClassDate(schedule.DayOfWeek, schedule.StartTime)
+	// Parse StartTime string (HH:MM) to time.Time for utility
+	startTimeParsed, _ := time.Parse("15:04", schedule.StartTime)
+	classDate := utils.GetNextClassDate(schedule.DayOfWeek, startTimeParsed)
 	if classDate.Before(now) {
 		classDate = classDate.AddDate(0, 0, 7) // Next week
 	}
@@ -295,7 +297,7 @@ func (r *studentRepository) BookClass(
 		return fmt.Errorf(
 			"anda sudah memiliki kelas di %s pukul %s. Silakan pilih waktu lain",
 			utils.GetDayName(classDate.Weekday()),
-			schedule.StartTime.Format("15:04"),
+			schedule.StartTime,
 		)
 	}
 
@@ -359,12 +361,15 @@ func (r *studentRepository) GetMyBookedClasses(ctx context.Context, studentUUID 
 	// ✅ Add status indicators
 	now := time.Now()
 	for i := range bookings {
+		startTimeStr := bookings[i].Schedule.StartTime
+		parsedStart, _ := time.Parse("15:04", startTimeStr)
+
 		classDateTime := time.Date(
 			bookings[i].ClassDate.Year(),
 			bookings[i].ClassDate.Month(),
 			bookings[i].ClassDate.Day(),
-			bookings[i].Schedule.StartTime.Hour(),
-			bookings[i].Schedule.StartTime.Minute(),
+			parsedStart.Hour(),
+			parsedStart.Minute(),
 			0, 0, time.Local,
 		)
 
@@ -490,7 +495,8 @@ func (r *studentRepository) GetAvailableSchedules(ctx context.Context, studentUU
 		sch := &schedules[i]
 
 		// A. Construct next class date
-		next := utils.GetNextClassDate(sch.DayOfWeek, sch.StartTime)
+		startTimeParsed, _ := time.Parse("15:04", sch.StartTime)
+		next := utils.GetNextClassDate(sch.DayOfWeek, startTimeParsed)
 		sch.NextClassDate = &next
 
 		// B. Check Duration Compatibility
