@@ -381,7 +381,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"refresh_token",
 			tokens.RefreshToken, // ✅ correct variable
 			60*60*24*7,          // 7 days
-			"/",
+			"/",	
 			"",    // ⚠️ change to your actual domain in production
 			false, // ✅ secure (HTTPS only)
 			true,  // ✅ HttpOnly
