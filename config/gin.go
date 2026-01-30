@@ -1,6 +1,7 @@
 package config
 
 import (
+	"chronosphere/middleware"
 	"chronosphere/utils"
 	"context"
 	"fmt"
@@ -48,7 +49,7 @@ func InitMiddleware(app *gin.Engine) {
 	app.Use(timeoutMiddleware(30 * time.Second))
 
 	// Rate limiter
-	// app.Use(middleware.RateLimiter())
+	app.Use(middleware.RateLimiter())
 
 }
 
