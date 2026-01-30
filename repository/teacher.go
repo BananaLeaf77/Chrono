@@ -578,7 +578,7 @@ func (r *teacherRepository) CancelBookedClass(
 	bookingID int,
 	teacherUUID string,
 	reason *string,
-) error {
+) (*domain.Booking, error) {
 
 	tx := r.db.WithContext(ctx).Begin()
 	defer func() {
@@ -591,35 +591,35 @@ func (r *teacherRepository) CancelBookedClass(
 
 	// Load booking + schedule
 	if err := tx.Preload("Schedule").
+		Preload("Schedule.Teacher").
+		Preload("Student").
+		Preload("PackageUsed").
+		Preload("PackageUsed.Package").
+		Preload("PackageUsed.Package.Instrument").
+		Preload("CancelUser").
 		Where("id = ? AND status = ?", bookingID, domain.StatusBooked).
 		First(&booking).Error; err != nil {
 		tx.Rollback()
-		return errors.New("booking tidak ditemukan atau sudah dibatalkan")
+		return nil, errors.New("booking tidak ditemukan atau sudah dibatalkan")
 	}
 
 	// Ownership check
 	if booking.Schedule.TeacherUUID != teacherUUID {
 		tx.Rollback()
-		return errors.New("anda tidak memiliki akses ke booking ini")
+		return nil, errors.New("anda tidak memiliki akses ke booking ini")
 	}
 
 	// Check if class is in the future
 	if booking.ClassDate.Before(time.Now()) {
 		tx.Rollback()
-		return errors.New("tidak bisa membatalkan kelas yang sudah lewat")
+		return nil, errors.New("tidak bisa membatalkan kelas yang sudah lewat")
 	}
 
 	// H-1 cancellation rule (24 hours before class)
 	minCancelTime := booking.ClassDate.Add(-24 * time.Hour)
 	if time.Now().After(minCancelTime) {
 		tx.Rollback()
-		return errors.New("pembatalan hanya bisa dilakukan minimal H-1 (24 jam) sebelum kelas")
-	}
-
-	// Default reason
-	if reason == nil || *reason == "" {
-		defaultReason := "Alasan tidak diberikan"
-		reason = &defaultReason
+		return nil, errors.New("pembatalan hanya bisa dilakukan minimal H-1 (24 jam) sebelum kelas")
 	}
 
 	cancelTime := time.Now()
@@ -633,7 +633,7 @@ func (r *teacherRepository) CancelBookedClass(
 			"notes":        reason,
 		}).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal membatalkan booking: %w", err)
+		return nil, fmt.Errorf("gagal membatalkan booking: %w", err)
 	}
 
 	// 🔁 Refund quota to the exact package used in this booking
@@ -641,7 +641,7 @@ func (r *teacherRepository) CancelBookedClass(
 		Where("id = ?", booking.StudentPackageID).
 		Update("remaining_quota", gorm.Expr("remaining_quota + 1")).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal refund quota: %w", err)
+		return nil, fmt.Errorf("gagal refund quota: %w", err)
 	}
 
 	// 🔁 Update schedule availability
@@ -649,7 +649,7 @@ func (r *teacherRepository) CancelBookedClass(
 		Where("id = ?", booking.ScheduleID).
 		Update("is_booked", false).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal memperbarui jadwal pengajar: %w", err)
+		return nil, fmt.Errorf("gagal memperbarui jadwal pengajar: %w", err)
 	}
 
 	// 🔁 Update or Insert into ClassHistory
@@ -665,7 +665,7 @@ func (r *teacherRepository) CancelBookedClass(
 		}
 		if err := tx.Create(&newHistory).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("gagal membuat riwayat kelas (cancel): %w", err)
+			return nil, fmt.Errorf("gagal membuat riwayat kelas (cancel): %w", err)
 		}
 	} else if err == nil {
 		// Update existing history
@@ -673,17 +673,34 @@ func (r *teacherRepository) CancelBookedClass(
 		history.Notes = reason
 		if err := tx.Save(&history).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("gagal update class history: %w", err)
+			return nil, fmt.Errorf("gagal update class history: %w", err)
 		}
 	} else {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
 
 	// Commit
 	if err := tx.Commit().Error; err != nil {
-		return fmt.Errorf("gagal menyimpan pembatalan: %w", err)
+		return nil, fmt.Errorf("gagal menyimpan pembatalan: %w", err)
 	}
 
-	return nil
+	// ✅ Reload Booking with CancelUser for notification
+	// We need to do this AFTER commit or look up using the same transaction before commit.
+	// Since we committed, we can use a new query or just reload.
+	// To be safe and simple, let's reload it.
+	if err := r.db.WithContext(ctx).
+		Preload("Schedule").
+		Preload("Schedule.Teacher").
+		Preload("Student").
+		Preload("PackageUsed").
+		Preload("PackageUsed.Package").
+		Preload("PackageUsed.Package.Instrument").
+		Preload("CancelUser").
+		First(&booking, booking.ID).Error; err != nil {
+		// Log error but don't fail the request since cancellation is done
+		fmt.Printf("⚠️ Failed to reload booking details: %v\n", err)
+	}
+
+	return &booking, nil
 }

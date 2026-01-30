@@ -33,9 +33,15 @@ func main() {
 	}
 
 	// Boot DB
-	db, _, err := config.BootDB()
+	db, addr, err := config.BootDB()
 	if err != nil {
 		log.Fatal("❌ Failed to connect to database: ", err)
+	}
+
+	// init WA message
+	WhatsappClient, _, err := config.InitWA(*addr)
+	if err != nil {
+		log.Fatal("❌ Failed to connect to WhatsApp: ", err)
 	}
 
 	// Redis config
@@ -68,10 +74,10 @@ func main() {
 	otpRepo := repository.NewOTPRedisRepository(redisClient)
 
 	// Init services
-	studentService := service.NewStudentUseCase(studentRepo)
-	managementService := service.NewManagerService(managerRepo)
-	adminService := service.NewAdminService(adminRepo)
-	teacherService := service.NewTeacherService(teacherRepo)
+	studentService := service.NewStudentUseCase(studentRepo, WhatsappClient)
+	managementService := service.NewManagerService(managerRepo, WhatsappClient)
+	adminService := service.NewAdminService(adminRepo, WhatsappClient)
+	teacherService := service.NewTeacherService(teacherRepo, WhatsappClient)
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
 
 	// RATE LIMITER

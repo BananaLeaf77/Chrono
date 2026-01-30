@@ -52,7 +52,7 @@ func (r *studentRepository) CancelBookedClass(
 	bookingID int,
 	studentUUID string,
 	reason *string,
-) error {
+) (*domain.Booking, error) {
 
 	tx := r.db.WithContext(ctx).Begin()
 	defer func() {
@@ -65,35 +65,35 @@ func (r *studentRepository) CancelBookedClass(
 
 	// Load booking + schedule
 	if err := tx.Preload("Schedule").
+		Preload("Schedule.Teacher").
+		Preload("Student").
+		Preload("PackageUsed").
+		Preload("PackageUsed.Package").
+		Preload("PackageUsed.Package.Instrument").
+		Preload("CancelUser").
 		Where("id = ? AND status = ?", bookingID, domain.StatusBooked).
 		First(&booking).Error; err != nil {
 		tx.Rollback()
-		return errors.New("booking tidak ditemukan atau sudah dibatalkan")
+		return nil, errors.New("booking tidak ditemukan atau sudah dibatalkan")
 	}
 
 	// Ownership check
 	if booking.StudentUUID != studentUUID {
 		tx.Rollback()
-		return errors.New("anda tidak memiliki akses ke booking ini")
+		return nil, errors.New("anda tidak memiliki akses ke booking ini")
 	}
 
 	// Check if class is in the future
 	if booking.ClassDate.Before(time.Now()) {
 		tx.Rollback()
-		return errors.New("tidak bisa membatalkan kelas yang sudah lewat")
+		return nil, errors.New("tidak bisa membatalkan kelas yang sudah lewat")
 	}
 
 	// H-1 cancellation rule (24 hours before class)
 	minCancelTime := booking.ClassDate.Add(-24 * time.Hour)
 	if time.Now().After(minCancelTime) {
 		tx.Rollback()
-		return errors.New("pembatalan hanya bisa dilakukan minimal H-1 (24 jam) sebelum kelas")
-	}
-
-	// Default reason
-	if reason == nil || *reason == "" {
-		defaultReason := "Alasan tidak diberikan"
-		reason = &defaultReason
+		return nil, errors.New("pembatalan hanya bisa dilakukan minimal H-1 (24 jam) sebelum kelas")
 	}
 
 	cancelTime := time.Now()
@@ -107,7 +107,7 @@ func (r *studentRepository) CancelBookedClass(
 			"notes":        reason,
 		}).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal membatalkan booking: %w", err)
+		return nil, fmt.Errorf("gagal membatalkan booking: %w", err)
 	}
 
 	// 🔁 Refund quota to the exact package used in this booking
@@ -115,7 +115,7 @@ func (r *studentRepository) CancelBookedClass(
 		Where("id = ?", booking.StudentPackageID).
 		Update("remaining_quota", gorm.Expr("remaining_quota + 1")).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal refund quota: %w", err)
+		return nil, fmt.Errorf("gagal refund quota: %w", err)
 	}
 
 	// 🔁 Update schedule availability
@@ -123,7 +123,7 @@ func (r *studentRepository) CancelBookedClass(
 		Where("id = ?", booking.ScheduleID).
 		Update("is_booked", false).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal memperbarui jadwal pengajar: %w", err)
+		return nil, fmt.Errorf("gagal memperbarui jadwal pengajar: %w", err)
 	}
 
 	// 🔁 Update or Insert into ClassHistory
@@ -139,7 +139,7 @@ func (r *studentRepository) CancelBookedClass(
 		}
 		if err := tx.Create(&newHistory).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("gagal membuat riwayat kelas (cancel): %w", err)
+			return nil, fmt.Errorf("gagal membuat riwayat kelas (cancel): %w", err)
 		}
 	} else if err == nil {
 		// Update existing history
@@ -147,23 +147,23 @@ func (r *studentRepository) CancelBookedClass(
 		history.Notes = reason
 		if err := tx.Save(&history).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("gagal update class history: %w", err)
+			return nil, fmt.Errorf("gagal update class history: %w", err)
 		}
 	} else {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
 
 	// Commit
 	if err := tx.Commit().Error; err != nil {
-		return fmt.Errorf("gagal menyimpan pembatalan: %w", err)
+		return nil, fmt.Errorf("gagal menyimpan pembatalan: %w", err)
 	}
 
-	return nil
+	return &booking, nil
 }
 
 func (r *studentRepository) BookClass(
-	ctx context.Context, studentUUID string, scheduleID int, instrumentID int) error {
+	ctx context.Context, studentUUID string, scheduleID int, instrumentID int) (*domain.Booking, error) {
 	tx := r.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -181,14 +181,14 @@ func (r *studentRepository) BookClass(
 	if err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("jadwal tidak ditemukan")
+			return nil, errors.New("jadwal tidak ditemukan")
 		}
-		return fmt.Errorf("gagal mengambil jadwal: %w", err)
+		return nil, fmt.Errorf("gagal mengambil jadwal: %w", err)
 	}
 
 	if schedule.IsBooked {
 		tx.Rollback()
-		return errors.New("jadwal sudah dibooking oleh siswa lain")
+		return nil, errors.New("jadwal sudah dibooking oleh siswa lain")
 	}
 
 	// 2️⃣ Verify Teacher Teaches the Requested Instrument
@@ -203,7 +203,7 @@ func (r *studentRepository) BookClass(
 
 	if !teacherTeachesInstrument {
 		tx.Rollback()
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"guru ini tidak mengajar instrumen yang dipilih. Guru hanya mengajar: %s",
 			strings.Join(teacherInstrumentNames, ", "),
 		)
@@ -226,9 +226,9 @@ func (r *studentRepository) BookClass(
 	if err != nil {
 		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("tidak ada paket aktif yang sesuai untuk instrumen ini dengan durasi %d menit", schedule.Duration)
+			return nil, fmt.Errorf("tidak ada paket aktif yang sesuai untuk instrumen ini dengan durasi %d menit", schedule.Duration)
 		}
-		return fmt.Errorf("gagal mencari paket: %w", err)
+		return nil, fmt.Errorf("gagal mencari paket: %w", err)
 	}
 
 	// 4️⃣ Room Availability Check
@@ -264,7 +264,7 @@ func (r *studentRepository) BookClass(
 
 	if err := query.Count(&bookingCount).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal memeriksa ketersediaan ruangan: %w", err)
+		return nil, fmt.Errorf("gagal memeriksa ketersediaan ruangan: %w", err)
 	}
 
 	limit := domain.RegularRoomLimit
@@ -274,7 +274,7 @@ func (r *studentRepository) BookClass(
 
 	if bookingCount >= limit {
 		tx.Rollback()
-		return errors.New("ruangan penuh untuk jam ini")
+		return nil, errors.New("ruangan penuh untuk jam ini")
 	}
 
 	// 5️⃣ Check for Existing Booking Conflict (Student side)
@@ -289,12 +289,12 @@ func (r *studentRepository) BookClass(
 
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal memeriksa konflik jadwal: %w", err)
+		return nil, fmt.Errorf("gagal memeriksa konflik jadwal: %w", err)
 	}
 
 	if existingBookingCount > 0 {
 		tx.Rollback()
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"anda sudah memiliki kelas di %s pukul %s. Silakan pilih waktu lain",
 			utils.GetDayName(classDate.Weekday()),
 			schedule.StartTime,
@@ -313,7 +313,7 @@ func (r *studentRepository) BookClass(
 
 	if err := tx.Create(&newBooking).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal membuat booking: %w", err)
+		return nil, fmt.Errorf("gagal membuat booking: %w", err)
 	}
 
 	// 7️⃣ Update Schedule Status
@@ -321,7 +321,7 @@ func (r *studentRepository) BookClass(
 		Where("id = ?", schedule.ID).
 		Update("is_booked", true).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal memperbarui status jadwal: %w", err)
+		return nil, fmt.Errorf("gagal memperbarui status jadwal: %w", err)
 	}
 
 	// 8️⃣ Deduct Quota
@@ -330,14 +330,23 @@ func (r *studentRepository) BookClass(
 		UpdateColumn("remaining_quota", gorm.Expr("remaining_quota - ?", 1)).
 		Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal mengurangi kuota paket: %w", err)
+		return nil, fmt.Errorf("gagal mengurangi kuota paket: %w", err)
+	}
+
+	// 9️⃣ Reload Booking with Relations (Crucial for Notifications)
+	if err := tx.Preload("Student").
+		Preload("Schedule.Teacher").
+		Preload("PackageUsed.Package.Instrument").
+		First(&newBooking, newBooking.ID).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("gagal memuat data booking: %w", err)
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		return fmt.Errorf("gagal menyimpan booking: %w", err)
+		return nil, fmt.Errorf("gagal menyimpan booking: %w", err)
 	}
 
-	return nil
+	return &newBooking, nil
 }
 
 func (r *studentRepository) GetMyBookedClasses(ctx context.Context, studentUUID string) (*[]domain.Booking, error) {

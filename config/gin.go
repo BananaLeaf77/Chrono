@@ -3,6 +3,7 @@ package config
 import (
 	"chronosphere/utils"
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -128,6 +129,7 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// ✅ Protect against panic
 		defer func() {
+			fmt.Println("1")
 			if r := recover(); r != nil {
 				log.Printf("🔥 Auth middleware panic recovered: %v", r)
 				c.JSON(http.StatusInternalServerError, gin.H{
@@ -141,6 +143,7 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 
 		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
 		if authHeader == "" {
+			fmt.Println("2")
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"message": "Need Credential to Access this Resource (Authorization header missing)",
@@ -150,6 +153,7 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 		}
 
 		if !strings.HasPrefix(authHeader, "Bearer ") {
+			fmt.Println("3")
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"message": "Invalid authorization header format",
@@ -163,14 +167,20 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 		// ✅ Safe token verification
 		userUUID, role, name, err := func() (string, string, string, error) {
 			defer func() {
+				fmt.Println("4")
 				if r := recover(); r != nil {
 					log.Printf("🔥 Token verification panic: %v", r)
 				}
 			}()
 			return jwtManager.VerifyToken(tokenStr)
 		}()
+		fmt.Println(userUUID)
+		fmt.Println(role)
+		fmt.Println(name)
+		fmt.Println(err)
 
 		if err != nil {
+			fmt.Println("5")
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"message": "Invalid or expired token",
@@ -179,6 +189,7 @@ func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		fmt.Println("6")
 
 		// Save to context
 		c.Set("userUUID", userUUID)
