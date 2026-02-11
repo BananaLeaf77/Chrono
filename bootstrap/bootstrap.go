@@ -67,13 +67,15 @@ func InitializeAppWithoutWhatsappNotification() (*gin.Engine, *gorm.DB) {
 	teacherRepo := repository.NewTeacherRepository(db)
 	managerRepo := repository.NewManagerRepository(db)
 	adminRepo := repository.NewAdminRepository(db)
+	paymentRepo := repository.NewPaymentRepository(db)
 	otpRepo := repository.NewOTPRedisRepository(redisClient)
 
 	// Init services
 	studentService := service.NewStudentUseCase(studentRepo, nil)
 	managementService := service.NewManagerService(managerRepo, nil)
-	adminService := service.NewAdminService(adminRepo, nil)
+	adminService := service.NewAdminService(adminRepo, paymentRepo, nil)
 	teacherService := service.NewTeacherService(teacherRepo, nil)
+	paymentService := service.NewPaymentService(paymentRepo, studentRepo, db)
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
 
 	// RATE LIMITER
@@ -91,6 +93,9 @@ func InitializeAppWithoutWhatsappNotification() (*gin.Engine, *gorm.DB) {
 	delivery.NewStudentHandler(app, studentService, authService.GetAccessTokenManager())
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
 	delivery.NewTeacherHandler(app, teacherService, authService.GetAccessTokenManager(), db)
+
+	// Inject AuthMiddleware from config for PaymentHandler
+	delivery.NewPaymentHandler(app, paymentService, config.AuthMiddleware(authService.GetAccessTokenManager()))
 
 	return app, db
 }
@@ -145,13 +150,15 @@ func InitializeAppWithoutRateLimiter() (*gin.Engine, *gorm.DB) {
 	teacherRepo := repository.NewTeacherRepository(db)
 	managerRepo := repository.NewManagerRepository(db)
 	adminRepo := repository.NewAdminRepository(db)
+	paymentRepo := repository.NewPaymentRepository(db)
 	otpRepo := repository.NewOTPRedisRepository(redisClient)
 
 	// Init services
 	studentService := service.NewStudentUseCase(studentRepo, WhatsappClient)
 	managementService := service.NewManagerService(managerRepo, WhatsappClient)
-	adminService := service.NewAdminService(adminRepo, WhatsappClient)
+	adminService := service.NewAdminService(adminRepo, paymentRepo, WhatsappClient)
 	teacherService := service.NewTeacherService(teacherRepo, WhatsappClient)
+	paymentService := service.NewPaymentService(paymentRepo, studentRepo, db)
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
 
 	// RATE LIMITER
@@ -169,6 +176,9 @@ func InitializeAppWithoutRateLimiter() (*gin.Engine, *gorm.DB) {
 	delivery.NewStudentHandler(app, studentService, authService.GetAccessTokenManager())
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
 	delivery.NewTeacherHandler(app, teacherService, authService.GetAccessTokenManager(), db)
+
+	// Inject AuthMiddleware from config for PaymentHandler
+	delivery.NewPaymentHandler(app, paymentService, config.AuthMiddleware(authService.GetAccessTokenManager()))
 
 	return app, db
 }
@@ -223,13 +233,15 @@ func InitializeFullApp() (*gin.Engine, *gorm.DB) {
 	teacherRepo := repository.NewTeacherRepository(db)
 	managerRepo := repository.NewManagerRepository(db)
 	adminRepo := repository.NewAdminRepository(db)
+	paymentRepo := repository.NewPaymentRepository(db)
 	otpRepo := repository.NewOTPRedisRepository(redisClient)
 
 	// Init services
 	studentService := service.NewStudentUseCase(studentRepo, WhatsappClient)
 	managementService := service.NewManagerService(managerRepo, WhatsappClient)
-	adminService := service.NewAdminService(adminRepo, WhatsappClient)
+	adminService := service.NewAdminService(adminRepo, paymentRepo, WhatsappClient)
 	teacherService := service.NewTeacherService(teacherRepo, WhatsappClient)
+	paymentService := service.NewPaymentService(paymentRepo, studentRepo, db)
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
 
 	// RATE LIMITER
@@ -247,6 +259,9 @@ func InitializeFullApp() (*gin.Engine, *gorm.DB) {
 	delivery.NewStudentHandler(app, studentService, authService.GetAccessTokenManager())
 	delivery.NewAdminHandler(app, adminService, authService.GetAccessTokenManager())
 	delivery.NewTeacherHandler(app, teacherService, authService.GetAccessTokenManager(), db)
+
+	// Inject AuthMiddleware from config for PaymentHandler
+	delivery.NewPaymentHandler(app, paymentService, config.AuthMiddleware(authService.GetAccessTokenManager()))
 
 	return app, db
 }

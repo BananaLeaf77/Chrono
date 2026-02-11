@@ -116,6 +116,7 @@ func runMigrations(db *gorm.DB) error {
 		&domain.StudentPackage{},
 		&domain.TeacherSchedule{},
 		&domain.Booking{},
+		&domain.Payment{},
 		&domain.ClassHistory{},
 		&domain.ClassDocumentation{},
 	}

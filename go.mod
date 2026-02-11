@@ -15,6 +15,7 @@ require (
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/rs/zerolog v1.34.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+	github.com/xendit/xendit-go/v6 v6.4.0
 	go.mau.fi/whatsmeow v0.0.0-20250916115455-914d640cc83c
 	golang.org/x/crypto v0.42.0
 	gorm.io/driver/postgres v1.6.0

@@ -42,6 +42,11 @@ type AdminUseCase interface {
 
 	// Class
 	GetAllClassHistories(ctx context.Context) (*[]ClassHistory, error)
+
+	// Dashboard / Analytics
+	GetTotalProfit(ctx context.Context, filter ProfitFilter) (float64, error)
+	GetPaymentHistory(ctx context.Context, filter HistoryFilter) ([]Payment, int64, error)
+	GetPackageSummary(ctx context.Context) ([]PackageSummary, error)
 }
 
 type AdminRepository interface {

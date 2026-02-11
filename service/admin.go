@@ -15,14 +15,16 @@ import (
 )
 
 type adminService struct {
-	adminRepo domain.AdminRepository
-	messanger *whatsmeow.Client
+	adminRepo   domain.AdminRepository
+	paymentRepo domain.PaymentRepository
+	messanger   *whatsmeow.Client
 }
 
-func NewAdminService(adminRepo domain.AdminRepository, meow *whatsmeow.Client) domain.AdminUseCase {
+func NewAdminService(adminRepo domain.AdminRepository, paymentRepo domain.PaymentRepository, meow *whatsmeow.Client) domain.AdminUseCase {
 	return &adminService{
-		adminRepo: adminRepo,
-		messanger: meow,
+		adminRepo:   adminRepo,
+		paymentRepo: paymentRepo,
+		messanger:   meow,
 	}
 }
 
@@ -31,6 +33,18 @@ func (s *adminService) UpdateAdmin(ctx context.Context, payload domain.User) err
 		return errors.New(utils.TranslateDBError(err))
 	}
 	return nil
+}
+
+func (s *adminService) GetTotalProfit(ctx context.Context, filter domain.ProfitFilter) (float64, error) {
+	return s.paymentRepo.GetTotalProfit(ctx, filter)
+}
+
+func (s *adminService) GetPaymentHistory(ctx context.Context, filter domain.HistoryFilter) ([]domain.Payment, int64, error) {
+	return s.paymentRepo.GetPaymentHistory(ctx, filter)
+}
+
+func (s *adminService) GetPackageSummary(ctx context.Context) ([]domain.PackageSummary, error) {
+	return s.paymentRepo.GetPackageSummary(ctx)
 }
 
 func (s *adminService) ClearUserDeletedAt(ctx context.Context, userUUID string) error {

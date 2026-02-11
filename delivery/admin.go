@@ -67,6 +67,11 @@ func NewAdminHandler(app *gin.Engine, uc domain.AdminUseCase, jwtManager *utils.
 
 		// Class Histories
 		admin.GET("/class-histories", h.GetAllClassHistories)
+
+		// Dashboard / Analytics
+		admin.GET("/profit", h.GetTotalProfit)
+		admin.GET("/payments/history", h.GetPaymentHistory)
+		admin.GET("/packages/summary", h.GetPackageSummary)
 	}
 }
 
@@ -655,4 +660,74 @@ func (h *AdminHandler) ClearUserDeletedAt(c *gin.Context) {
 	}
 	utils.PrintLogInfo(&name, 200, "ClearUserDeletedAt", nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User restored successfully"})
+}
+
+func (h *AdminHandler) GetTotalProfit(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	var filter domain.ProfitFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		utils.PrintLogInfo(&name, 400, "GetTotalProfit - BindQuery", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": utils.TranslateValidationError(err)})
+		return
+	}
+
+	profit, err := h.uc.GetTotalProfit(c.Request.Context(), filter)
+	if err != nil {
+		utils.PrintLogInfo(&name, 500, "GetTotalProfit - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to calculate profit"})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "GetTotalProfit", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"total_profit": profit}})
+}
+
+func (h *AdminHandler) GetPaymentHistory(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+	var filter domain.HistoryFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		utils.PrintLogInfo(&name, 400, "GetPaymentHistory - BindQuery", &err)
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": utils.TranslateValidationError(err)})
+		return
+	}
+
+	// Set defaults if not provided
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = 10
+	}
+
+	payments, total, err := h.uc.GetPaymentHistory(c.Request.Context(), filter)
+	if err != nil {
+		utils.PrintLogInfo(&name, 500, "GetPaymentHistory - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to retrieve payment history"})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "GetPaymentHistory", nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    payments,
+		"meta": gin.H{
+			"page":  filter.Page,
+			"limit": filter.Limit,
+			"total": total,
+		},
+	})
+}
+
+func (h *AdminHandler) GetPackageSummary(c *gin.Context) {
+	name := utils.GetAPIHitter(c)
+
+	summary, err := h.uc.GetPackageSummary(c.Request.Context())
+	if err != nil {
+		utils.PrintLogInfo(&name, 500, "GetPackageSummary - UseCase", &err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error(), "message": "Failed to retrieve package summary"})
+		return
+	}
+
+	utils.PrintLogInfo(&name, 200, "GetPackageSummary", nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": summary})
 }
