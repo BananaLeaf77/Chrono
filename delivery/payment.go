@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"chronosphere/domain"
+	"chronosphere/middleware"
 	"chronosphere/utils"
 	"net/http"
 	"os"
@@ -22,7 +23,7 @@ func NewPaymentHandler(r *gin.Engine, paymentUseCase domain.PaymentUseCase, auth
 	paymentGroup := r.Group("/api/v1/payment")
 	{
 		// Authenticated route for checkout
-		paymentGroup.POST("/checkout", authMiddleware, handler.Checkout)
+		paymentGroup.POST("/checkout", authMiddleware, middleware.StudentOnly(), handler.Checkout)
 
 		// Public route for webhook (Xendit will call this)
 		paymentGroup.POST("/callback", handler.PaymentCallback)
