@@ -106,6 +106,51 @@ func ManagerAndAdminOnly() gin.HandlerFunc {
 	}
 }
 
+func ManagerOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := utils.GetAPIHitter(c)
+		role, exists := c.Get("role")
+		if !exists {
+			utils.PrintLogInfo(&name, 403, "Manager only Middleware - Role Check", nil)
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "Manager access required",
+			})
+			c.Abort()
+			return
+		}
+
+		// Check if role is either Admin or Manager
+		if role != domain.RoleManagement {
+			utils.PrintLogInfo(&name, 403, "Manager only Middleware - Role Check", nil)
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "Manager access required",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func TeacherOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := utils.GetAPIHitter(c)
+		role, exists := c.Get("role")
+		if !exists || role == domain.RoleStudent || role == domain.RoleManagement || role == domain.RoleAdmin {
+			utils.PrintLogInfo(&name, 403, "Teacher only Middleware - Role Check", nil)
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "Teacher access required",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 func ValidateTurnedOffUserMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := utils.GetAPIHitter(c)

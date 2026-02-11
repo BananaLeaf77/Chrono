@@ -24,7 +24,7 @@ func NewTeacherHandler(app *gin.Engine, tc domain.TeacherUseCase, jwtManager *ut
 	h := &TeacherHandler{tc: tc}
 
 	teacher := app.Group("/teacher")
-	teacher.Use(config.AuthMiddleware(jwtManager), middleware.TeacherAndAdminOnly(), middleware.ValidateTurnedOffUserMiddleware(db))
+	teacher.Use(config.AuthMiddleware(jwtManager), middleware.TeacherOnly(), middleware.ValidateTurnedOffUserMiddleware(db))
 	{
 		teacher.GET("/profile", h.GetMyProfile)
 		teacher.GET("/schedules", h.GetMySchedules)
