@@ -79,6 +79,7 @@ type PaymentRepository interface {
 	GetTotalProfit(ctx context.Context, filter ProfitFilter) (float64, error)
 	GetPaymentHistory(ctx context.Context, filter HistoryFilter) ([]Payment, int64, error)
 	GetPackageSummary(ctx context.Context) ([]PackageSummary, error)
+	GetStudentBuyerDetailsAndPackage(ctx context.Context, studentUUID string, packageID int) (*User, *Package, error)
 }
 
 type PaymentUseCase interface {

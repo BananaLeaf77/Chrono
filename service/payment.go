@@ -170,6 +170,13 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 		if err := tx.Commit().Error; err != nil {
 			return err
 		}
+
+		// send notification
+		student, pkg, err := s.paymentRepo.GetStudentBuyerDetailsAndPackage(ctx, payment.StudentUUID, payment.PackageID)
+		if err != nil {
+			return err
+		}
+		s.sendPaymentSuccessNotification(student, pkg)
 	} else if string(payload.Status) == "EXPIRED" {
 		s.paymentRepo.UpdateStatus(ctx, payment.ExternalID, domain.PaymentStatusExpired, nil)
 	} else {
@@ -180,7 +187,7 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 	return nil
 }
 
-func (s *paymentService) sendPaymentSuccessNotification(ctx context.Context, student *domain.User, pkg *domain.Package) {
+func (s *paymentService) sendPaymentSuccessNotification(student *domain.User, pkg *domain.Package) {
 	// Normalize phone number
 	studentPhone := utils.NormalizePhoneNumber(student.Phone)
 	studentJID := types.NewJID(studentPhone, types.DefaultUserServer)
@@ -203,11 +210,11 @@ Paket *"%s"* kamu sudah aktif dan siap digunakan.
 • 🏆 Pantau progress belajarmu
 
 🚀 *Mulai belajar sekarang:*
-🔗 https://app.chronolearning.id/student/dashboard
+🔗 https://madeu.app
 
-Terima kasih telah memilih Chrono! 🌟
+Terima kasih telah memilih MadEU! 🌟
 
-*#ChronoLearning #BelajarJadiMudah*`,
+*#MadEU #BelajarJadiMudah*`,
 		student.Name,
 		pkg.Name,
 		pkg.Name,

@@ -18,6 +18,31 @@ func NewPaymentRepository(db *gorm.DB) domain.PaymentRepository {
 	return &paymentRepository{db: db}
 }
 
+func (r *paymentRepository) GetStudentBuyerDetailsAndPackage(ctx context.Context, studentUUID string, packageID int) (*domain.User, *domain.Package, error) {
+	var student domain.User
+	var pkg domain.Package
+	err := r.db.WithContext(ctx).
+		Where("uuid = ?", studentUUID).
+		Preload("Package").
+		First(&student).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+	err = r.db.WithContext(ctx).
+		Where("id = ?", packageID).
+		First(&pkg).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+	return &student, &pkg, nil
+}
+
 func (r *paymentRepository) Create(ctx context.Context, payment *domain.Payment) error {
 	return r.db.WithContext(ctx).Create(payment).Error
 }
