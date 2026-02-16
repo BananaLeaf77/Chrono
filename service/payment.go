@@ -2,14 +2,19 @@ package service
 
 import (
 	"chronosphere/domain"
+	"chronosphere/utils"
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
 	"github.com/xendit/xendit-go/v6"
 	"github.com/xendit/xendit-go/v6/invoice"
+	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waE2E"
+	"go.mau.fi/whatsmeow/types"
 	"gorm.io/gorm"
 )
 
@@ -18,6 +23,7 @@ type paymentService struct {
 	studentRepo  domain.StudentRepository // We need to add packages to student
 	xenditClient *xendit.APIClient
 	db           *gorm.DB // Needed for transaction if we want atomic package addition
+	messenger    *whatsmeow.Client
 }
 
 func NewPaymentService(paymentRepo domain.PaymentRepository, studentRepo domain.StudentRepository, db *gorm.DB) domain.PaymentUseCase {
@@ -129,10 +135,6 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 		return nil // Already paid
 	}
 
-	// Map Xendit status to domain status
-	// Xendit: PAID, EXPIRED, PENDING sent as ... string?
-	// The payload.Status is *InvoiceStatus which is a string enum in the SDK
-
 	// If PAID
 	if string(payload.Status) == "PAID" || string(payload.Status) == "SETTLED" {
 		// Start Transaction
@@ -151,27 +153,6 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 			tx.Rollback()
 			return err
 		}
-
-		// Activate Package for Student
-		// Logic: Create StudentPackage record
-		// Calculate EndDate based on StartDate (now) and Duration?
-		// Wait, duration is minutes (30/60) per class, but package validity?
-		// Looking at `StudentPackage` struct in `domain/main_table.go`:
-		// StartDate time.Time
-		// EndDate time.Time
-		// RemainingQuota int
-
-		// How long is a package valid?
-		// The `Package` struct has `Quota`.
-		// Usually a package might be valid for X months?
-		// The current `main_table.go` doesn't show "ValidityDuration" on `Package` struct.
-		// "Duration" field is for class duration (30/60 mins).
-		// Let's assume a default validity (e.g. 1 month) or maybe it's infinite until quota runs out?
-		// Existing code: `student_packages.end_date >= ?` implies they expire.
-		// Let's check if there is a convention.
-		// For now, let's assume 1 Month validity? Or 3 months?
-		// Better to be safe, maybe 3 months? Or check if Package has description saying validity.
-		// I will create the `StudentPackage` with 30 days validity for now + Quota from package.
 
 		studentPackage := domain.StudentPackage{
 			StudentUUID:    payment.StudentUUID,
@@ -197,4 +178,60 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 	}
 
 	return nil
+}
+
+func (s *paymentService) sendPaymentSuccessNotification(ctx context.Context, student *domain.User, pkg *domain.Package) {
+	// Normalize phone number
+	studentPhone := utils.NormalizePhoneNumber(student.Phone)
+	studentJID := types.NewJID(studentPhone, types.DefaultUserServer)
+
+	// Rich message with emojis
+	msgToStudent := fmt.Sprintf(
+		`🎉 *Halo %s!*
+
+✅ *Pembayaran Berhasil!*
+Paket *"%s"* kamu sudah aktif dan siap digunakan.
+
+📦 *Detail Paket:*
+┣ 📚 Nama Paket: %s
+┣ 🎯 Jumlah Kelas: %d sesi
+┗ ⏳ Masa Aktif: 30 hari
+
+✨ *Apa yang bisa kamu lakukan sekarang?*
+• 📅 Pesan kelas dengan guru favoritmu
+• 📖 Mulai belajar dan raih prestasi
+• 🏆 Pantau progress belajarmu
+
+🚀 *Mulai belajar sekarang:*
+🔗 https://app.chronolearning.id/student/dashboard
+
+Terima kasih telah memilih Chrono! 🌟
+
+*#ChronoLearning #BelajarJadiMudah*`,
+		student.Name,
+		pkg.Name,
+		pkg.Name,
+		pkg.Quota,
+	)
+
+	// Create WhatsApp message
+	waMessage := &waE2E.Message{
+		Conversation: &msgToStudent,
+	}
+
+	// Send message asynchronously with proper context handling
+	go func() {
+		// Create new background context for async operation
+		asyncCtx := context.Background()
+
+		// Send message
+		_, err := s.messenger.SendMessage(asyncCtx, studentJID, waMessage)
+		if err != nil {
+			log.Printf("🔕 Gagal mengirim notifikasi WhatsApp ke %s (%s): %v",
+				student.Name, student.Phone, err)
+		} else {
+			log.Printf("🔔 Notifikasi WhatsApp berhasil dikirim ke: %s (%s)",
+				student.Name, student.Phone)
+		}
+	}()
 }

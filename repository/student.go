@@ -386,6 +386,7 @@ func (r *studentRepository) GetMyBookedClasses(ctx context.Context, studentUUID 
 		case now.Before(classDateTime):
 			bookings[i].Status = domain.StatusUpcoming
 		}
+		
 	}
 
 	return &bookings, nil

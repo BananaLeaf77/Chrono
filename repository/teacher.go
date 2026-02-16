@@ -156,7 +156,7 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 	// 1️⃣ Get booking with package info
 	var booking domain.Booking
 	err := tx.Preload("Schedule").
-		Preload("StudentPackage.Package").
+		Preload("PackageUsed.Package").
 		Where("id = ? AND status = ?", bookingID, domain.StatusBooked).
 		First(&booking).Error
 	if err != nil {
@@ -271,6 +271,13 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		return fmt.Errorf("Kelas belum dimulai. Kelas akan dimulai pukul %s", startFormatted)
 	}
 
+	defaultNotes := "Kelas selesai, tanpa catatan"
+
+	// set default notes
+	if *payload.Notes == "" || payload.Notes == nil {
+		payload.Notes = &defaultNotes
+	}
+
 	// 6️⃣ Create ClassHistory
 	classHistory := domain.ClassHistory{
 		BookingID: booking.ID,
@@ -331,6 +338,15 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 			tx.Rollback()
 			return fmt.Errorf("gagal memperbarui jadwal: %w", err)
 		}
+	}
+
+	// change student latest note to this note
+	err = tx.Model(&domain.StudentProfile{}).
+		Where("user_uuid = ?", booking.StudentUUID).
+		Update("latest_note", payload.Notes).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal memperbarui catatan terakhir: %w", err)
 	}
 
 	// ✅ Commit
