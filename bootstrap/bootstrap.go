@@ -75,7 +75,7 @@ func InitializeAppWithoutWhatsappNotification() (*gin.Engine, *gorm.DB) {
 	managementService := service.NewManagerService(managerRepo, nil)
 	adminService := service.NewAdminService(adminRepo, paymentRepo, nil)
 	teacherService := service.NewTeacherService(teacherRepo, nil)
-	paymentService := service.NewPaymentService(paymentRepo, studentRepo, db)
+	paymentService := service.NewPaymentService(paymentRepo, studentRepo, db, nil)
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
 
 	// RATE LIMITER
@@ -158,7 +158,7 @@ func InitializeAppWithoutRateLimiter() (*gin.Engine, *gorm.DB) {
 	managementService := service.NewManagerService(managerRepo, WhatsappClient)
 	adminService := service.NewAdminService(adminRepo, paymentRepo, WhatsappClient)
 	teacherService := service.NewTeacherService(teacherRepo, WhatsappClient)
-	paymentService := service.NewPaymentService(paymentRepo, studentRepo, db)
+	paymentService := service.NewPaymentService(paymentRepo, studentRepo, db, WhatsappClient)
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
 
 	// RATE LIMITER
@@ -241,7 +241,7 @@ func InitializeFullApp() (*gin.Engine, *gorm.DB) {
 	managementService := service.NewManagerService(managerRepo, WhatsappClient)
 	adminService := service.NewAdminService(adminRepo, paymentRepo, WhatsappClient)
 	teacherService := service.NewTeacherService(teacherRepo, WhatsappClient)
-	paymentService := service.NewPaymentService(paymentRepo, studentRepo, db)
+	paymentService := service.NewPaymentService(paymentRepo, studentRepo, db, WhatsappClient)
 	authService := service.NewAuthService(authRepo, otpRepo, jwtSecret)
 
 	// RATE LIMITER

@@ -310,43 +310,11 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 		return fmt.Errorf("gagal memperbarui status booking: %w", err)
 	}
 
-	// 9️⃣ IMPORTANT: Check if the other half of schedule is available
-	// If 30-min package used first half (13:00-13:30), second half (13:30-14:00) should be freed
-	if is30MinPackage {
-		// Check if there's another booking for the second half
-		var secondHalfBooking domain.Booking
-		err := tx.Where("schedule_id = ? AND class_date = ? AND status = ?",
-			booking.ScheduleID, booking.ClassDate, domain.StatusBooked).
-			Where("id != ?", booking.ID).
-			First(&secondHalfBooking).Error
-
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// No booking for second half, keep schedule available
-			// Do nothing - schedule already marked as available
-		} else if err == nil {
-			// There's a booking for second half, DON'T free the schedule
-			// Do nothing - keep schedule booked
-		} else {
-			tx.Rollback()
-			return fmt.Errorf("gagal memeriksa jadwal: %w", err)
-		}
-	} else {
-		// 60-min package used entire slot, free the schedule
-		if err := tx.Model(&domain.TeacherSchedule{}).
-			Where("id = ?", booking.ScheduleID).
-			Update("is_booked", false).Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("gagal memperbarui jadwal: %w", err)
-		}
-	}
-
-	// change student latest note to this note
-	err = tx.Model(&domain.StudentProfile{}).
-		Where("user_uuid = ?", booking.StudentUUID).
-		Update("latest_note", payload.Notes).Error
-	if err != nil {
+	if err := tx.Model(&domain.TeacherSchedule{}).
+		Where("id = ?", booking.ScheduleID).
+		Update("is_booked", false).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("gagal memperbarui catatan terakhir: %w", err)
+		return fmt.Errorf("gagal memperbarui jadwal: %w", err)
 	}
 
 	// ✅ Commit
@@ -583,6 +551,36 @@ func (r *teacherRepository) GetAllBookedClass(ctx context.Context, teacherUUID s
 
 		case now.After(classEnd):
 			bookings[i].IsReadyToFinish = true
+		}
+	}
+
+	// ✅ Populate LatestNote for each student
+	for i := range bookings {
+		var notes []string
+		// Fetch last 3 completed class histories for this student
+		err := r.db.WithContext(ctx).
+			Model(&domain.ClassHistory{}).
+			Joins("JOIN bookings ON bookings.id = class_histories.booking_id").
+			Where("bookings.student_uuid = ?", bookings[i].StudentUUID).
+			Where("class_histories.status = ?", domain.StatusCompleted).
+			Where("class_histories.notes IS NOT NULL AND class_histories.notes != ''").
+			Order("class_histories.created_at DESC").
+			Limit(5).
+			Pluck("class_histories.notes", &notes).Error
+
+		if err == nil && len(notes) > 0 {
+			if bookings[i].Student.StudentProfile == nil {
+				// Initialize if nil, though Preload should handle it if relation exists
+				// checking if we need to load it first
+				var profile domain.StudentProfile
+				if err := r.db.WithContext(ctx).Where("user_uuid = ?", bookings[i].StudentUUID).First(&profile).Error; err == nil {
+					bookings[i].Student.StudentProfile = &profile
+				}
+			}
+
+			if bookings[i].Student.StudentProfile != nil {
+				bookings[i].Student.StudentProfile.LatestNote = &notes
+			}
 		}
 	}
 

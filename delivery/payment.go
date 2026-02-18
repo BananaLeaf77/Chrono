@@ -105,6 +105,8 @@ func (h *PaymentHandler) PaymentCallback(c *gin.Context) {
 	// Process
 	err := h.paymentUseCase.HandleCallback(c.Request.Context(), &invoiceData)
 	if err != nil {
+		utils.PrintPretty(invoiceData)
+		utils.PrintPretty(err)
 		// We return 200 even on error to tell Xendit we received it,
 		// otherwise they keep retrying. But maybe 500 if temporary error?
 		// Usually 5xx triggers retry. 4xx doesn't.

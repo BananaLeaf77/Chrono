@@ -18,6 +18,20 @@ func NewPaymentRepository(db *gorm.DB) domain.PaymentRepository {
 	return &paymentRepository{db: db}
 }
 
+func (r *paymentRepository) CheckStudentProfileExist(ctx context.Context, studentUUID string) (bool, error) {
+	var studentProfile domain.StudentProfile
+	err := r.db.WithContext(ctx).
+		Where("student_uuid = ?", studentUUID).
+		First(&studentProfile).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *paymentRepository) GetStudentBuyerDetailsAndPackage(ctx context.Context, studentUUID string, packageID int) (*domain.User, *domain.Package, error) {
 	var student domain.User
 	var pkg domain.Package

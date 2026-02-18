@@ -188,7 +188,7 @@ func (r *studentRepository) BookClass(
 
 	if schedule.IsBooked {
 		tx.Rollback()
-		return nil, errors.New("jadwal sudah dibooking oleh siswa lain")
+		return nil, errors.New("jadwal sudah dibooking oleh siswa")
 	}
 
 	// 2️⃣ Verify Teacher Teaches the Requested Instrument
@@ -386,7 +386,7 @@ func (r *studentRepository) GetMyBookedClasses(ctx context.Context, studentUUID 
 		case now.Before(classDateTime):
 			bookings[i].Status = domain.StatusUpcoming
 		}
-		
+
 	}
 
 	return &bookings, nil

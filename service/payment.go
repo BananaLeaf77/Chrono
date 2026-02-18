@@ -26,7 +26,7 @@ type paymentService struct {
 	messenger    *whatsmeow.Client
 }
 
-func NewPaymentService(paymentRepo domain.PaymentRepository, studentRepo domain.StudentRepository, db *gorm.DB) domain.PaymentUseCase {
+func NewPaymentService(paymentRepo domain.PaymentRepository, studentRepo domain.StudentRepository, db *gorm.DB, messenger *whatsmeow.Client) domain.PaymentUseCase {
 	// Initialize Xendit Client
 	// Note: In a real scenario, we might pass the client in, but here we can init it if keys are in env
 	// Or better yet, initialize it here using Env vars.
@@ -46,6 +46,7 @@ func NewPaymentService(paymentRepo domain.PaymentRepository, studentRepo domain.
 		studentRepo:  studentRepo,
 		xenditClient: client,
 		db:           db,
+		messenger:    messenger,
 	}
 }
 
@@ -121,6 +122,7 @@ func (s *paymentService) CreateInvoice(ctx context.Context, studentUUID string, 
 }
 
 func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.Invoice) error {
+
 	// 1. Verify payment exists
 	payment, err := s.paymentRepo.FindByExternalID(ctx, payload.ExternalId)
 	if err != nil {
@@ -154,6 +156,15 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 			return err
 		}
 
+		// check student profile exist
+		exist, _ := s.paymentRepo.CheckStudentProfileExist(ctx, payment.StudentUUID)
+		fmt.Println("exist", exist)
+		if !exist {
+			tx.Create(&domain.StudentProfile{
+				UserUUID: payment.StudentUUID,
+			})
+		}
+
 		studentPackage := domain.StudentPackage{
 			StudentUUID:    payment.StudentUUID,
 			PackageID:      payment.PackageID,
@@ -172,11 +183,8 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 		}
 
 		// send notification
-		student, pkg, err := s.paymentRepo.GetStudentBuyerDetailsAndPackage(ctx, payment.StudentUUID, payment.PackageID)
-		if err != nil {
-			return err
-		}
-		s.sendPaymentSuccessNotification(student, pkg)
+		s.sendPaymentSuccessNotification(&payment.Student, &payment.Package)
+
 	} else if string(payload.Status) == "EXPIRED" {
 		s.paymentRepo.UpdateStatus(ctx, payment.ExternalID, domain.PaymentStatusExpired, nil)
 	} else {

@@ -50,7 +50,7 @@ type User struct {
 type StudentProfile struct {
 	UserUUID   string           `gorm:"primaryKey;type:uuid;constraint:OnDelete:CASCADE;" json:"user_uuid"`
 	Packages   []StudentPackage `gorm:"foreignKey:StudentUUID;constraint:OnDelete:CASCADE;" json:"packages"`
-	LatestNote *string          `json:"latest_note,omitempty"`
+	LatestNote *[]string        `gorm:"-" json:"latest_note,omitempty"`
 }
 
 type Package struct {

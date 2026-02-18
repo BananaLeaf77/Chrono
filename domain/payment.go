@@ -80,6 +80,7 @@ type PaymentRepository interface {
 	GetPaymentHistory(ctx context.Context, filter HistoryFilter) ([]Payment, int64, error)
 	GetPackageSummary(ctx context.Context) ([]PackageSummary, error)
 	GetStudentBuyerDetailsAndPackage(ctx context.Context, studentUUID string, packageID int) (*User, *Package, error)
+	CheckStudentProfileExist(ctx context.Context, studentUUID string) (bool, error)
 }
 
 type PaymentUseCase interface {

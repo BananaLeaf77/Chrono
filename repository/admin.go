@@ -424,7 +424,7 @@ func (r *adminRepo) AssignPackageToStudent(ctx context.Context, studentUUID stri
 	if err := tx.Create(&newSub).Error; err != nil {
 		tx.Rollback()
 		return nil, nil, errors.New(utils.TranslateDBError(err))
-	}
+	}	
 
 	tx.Commit()
 	return &student, &pkg, nil
