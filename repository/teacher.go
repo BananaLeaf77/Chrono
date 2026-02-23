@@ -489,6 +489,7 @@ func (r *teacherRepository) GetAllBookedClass(ctx context.Context, teacherUUID s
 
 	err := r.db.WithContext(ctx).
 		Preload("Student").
+		Preload("Student.StudentProfile").
 		Preload("PackageUsed").
 		Preload("PackageUsed.Package").
 		Preload("PackageUsed.Package.Instrument").
@@ -554,34 +555,45 @@ func (r *teacherRepository) GetAllBookedClass(ctx context.Context, teacherUUID s
 		}
 	}
 
-	// ✅ Populate LatestNote for each student
+	// ✅ Populate LatestClassHistories for each student
 	for i := range bookings {
-		var notes []string
-		// Fetch last 3 completed class histories for this student
+		histories := make([]domain.ClassHistory, 0)
+
+		// Get instrument ID from the booked package
+		var instrumentID int
+		if bookings[i].PackageUsed.Package != nil {
+			instrumentID = bookings[i].PackageUsed.Package.InstrumentID
+		}
+
+		// Fetch completed class histories for this student, filtered by instrument
 		err := r.db.WithContext(ctx).
 			Model(&domain.ClassHistory{}).
+			Preload("Booking").
+			Preload("Booking.Schedule").
+			Preload("Booking.Schedule.Teacher").
+			Preload("Booking.PackageUsed").
+			Preload("Booking.PackageUsed.Package").
+			Preload("Booking.PackageUsed.Package.Instrument").
 			Joins("JOIN bookings ON bookings.id = class_histories.booking_id").
+			Joins("JOIN student_packages ON student_packages.id = bookings.student_package_id").
+			Joins("JOIN packages ON packages.id = student_packages.package_id").
 			Where("bookings.student_uuid = ?", bookings[i].StudentUUID).
+			Where("packages.instrument_id = ?", instrumentID).
 			Where("class_histories.status = ?", domain.StatusCompleted).
-			Where("class_histories.notes IS NOT NULL AND class_histories.notes != ''").
 			Order("class_histories.created_at DESC").
-			Limit(5).
-			Pluck("class_histories.notes", &notes).Error
+			Find(&histories).Error
 
-		if err == nil && len(notes) > 0 {
-			if bookings[i].Student.StudentProfile == nil {
-				// Initialize if nil, though Preload should handle it if relation exists
-				// checking if we need to load it first
-				var profile domain.StudentProfile
-				if err := r.db.WithContext(ctx).Where("user_uuid = ?", bookings[i].StudentUUID).First(&profile).Error; err == nil {
-					bookings[i].Student.StudentProfile = &profile
-				}
-			}
+		if err != nil {
+			fmt.Printf("⚠️ Failed to fetch histories for student %s: %v\n", bookings[i].StudentUUID, err)
+		}
 
-			if bookings[i].Student.StudentProfile != nil {
-				bookings[i].Student.StudentProfile.LatestNote = &notes
+		if bookings[i].Student.StudentProfile == nil {
+			bookings[i].Student.StudentProfile = &domain.StudentProfile{
+				UserUUID: bookings[i].StudentUUID,
 			}
 		}
+
+		bookings[i].Student.StudentProfile.LatestClassHistories = &histories
 	}
 
 	return &bookings, nil
