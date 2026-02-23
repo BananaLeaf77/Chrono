@@ -181,9 +181,10 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 		if err := tx.Commit().Error; err != nil {
 			return err
 		}
-
-		// send notification
-		s.sendPaymentSuccessNotification(&payment.Student, &payment.Package)
+		
+		if s.messenger != nil {
+			s.sendPaymentSuccessNotification(&payment.Student, &payment.Package)
+		}
 
 	} else if string(payload.Status) == "EXPIRED" {
 		s.paymentRepo.UpdateStatus(ctx, payment.ExternalID, domain.PaymentStatusExpired, nil)
