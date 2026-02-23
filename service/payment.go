@@ -170,7 +170,7 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 			PackageID:      payment.PackageID,
 			RemainingQuota: payment.Package.Quota, // Assuming Package was preloaded in FindByExternalID
 			StartDate:      now,
-			EndDate:        now.AddDate(0, 1, 0), // Adds 1 month
+			EndDate:        now.AddDate(0, 0, payment.Package.ExpiredDuration), // Adds duration in days
 		}
 
 		if err := tx.Create(&studentPackage).Error; err != nil {
@@ -181,7 +181,7 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 		if err := tx.Commit().Error; err != nil {
 			return err
 		}
-		
+
 		if s.messenger != nil {
 			s.sendPaymentSuccessNotification(&payment.Student, &payment.Package)
 		}
@@ -211,7 +211,7 @@ Paket *"%s"* kamu sudah aktif dan siap digunakan.
 📦 *Detail Paket:*
 ┣ 📚 Nama Paket: %s
 ┣ 🎯 Jumlah Kelas: %d sesi
-┗ ⏳ Masa Aktif: 30 hari
+┗ ⏳ Masa Aktif: %d hari
 
 ✨ *Apa yang bisa kamu lakukan sekarang?*
 • 📅 Pesan kelas dengan guru favoritmu
@@ -228,6 +228,7 @@ Terima kasih telah memilih MadEU! 🌟
 		pkg.Name,
 		pkg.Name,
 		pkg.Quota,
+		pkg.ExpiredDuration,
 	)
 
 	// Create WhatsApp message
