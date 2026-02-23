@@ -167,6 +167,7 @@ func ValidateTurnedOffUserMiddleware(db *gorm.DB) gin.HandlerFunc {
 
 		if role != domain.RoleTeacher && role != domain.RoleManagement {
 			c.Next()
+			return
 		}
 
 		userUUID, exists := c.Get("userUUID")
