@@ -93,6 +93,6 @@ Note: This QR code will expire in a short time. If it expires, you'll receive a 
 		}
 	}
 
-	log.Print("Connected to ", utils.ColorText("Whatsapp", utils.Green), " successfully")
+	log.Print("✅Connected to ", utils.ColorText("Whatsapp", utils.Green), " successfully")
 	return client, ctx, nil
 }
