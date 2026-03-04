@@ -273,8 +273,7 @@ func (r *teacherRepository) FinishClass(ctx context.Context, bookingID int, teac
 
 	defaultNotes := "Kelas selesai, tanpa catatan"
 
-	// set default notes
-	if *payload.Notes == "" || payload.Notes == nil {
+	if payload.Notes == nil || *payload.Notes == "" {
 		payload.Notes = &defaultNotes
 	}
 

@@ -20,20 +20,16 @@ import (
 
 type paymentService struct {
 	paymentRepo  domain.PaymentRepository
-	studentRepo  domain.StudentRepository // We need to add packages to student
+	studentRepo  domain.StudentRepository
 	xenditClient *xendit.APIClient
-	db           *gorm.DB // Needed for transaction if we want atomic package addition
+	db           *gorm.DB
 	messenger    *whatsmeow.Client
+	// shutdownCtx is cancelled when the app begins graceful shutdown.
+	// WA goroutines respect this so they don’t get orphaned.
+	shutdownCtx context.Context
 }
 
 func NewPaymentService(paymentRepo domain.PaymentRepository, studentRepo domain.StudentRepository, db *gorm.DB, messenger *whatsmeow.Client) domain.PaymentUseCase {
-	// Initialize Xendit Client
-	// Note: In a real scenario, we might pass the client in, but here we can init it if keys are in env
-	// Or better yet, initialize it here using Env vars.
-	// However, usually dependencies are passed in. For now, let's create it here or assume the handler/bootstrap sets it up?
-	// The implementation plan didn't specify Xendit Client injection in NewPaymentService, but it's cleaner.
-	// Let's instantiate it here using os.Getenv to follow the standard pattern if not passed.
-
 	xenditKey := os.Getenv("XENDIT_API_KEY")
 	if xenditKey == "" {
 		fmt.Println("WARNING: XENDIT_API_KEY is not set")
@@ -47,17 +43,21 @@ func NewPaymentService(paymentRepo domain.PaymentRepository, studentRepo domain.
 		xenditClient: client,
 		db:           db,
 		messenger:    messenger,
+		// Default to background; replaced via SetShutdownContext during bootstrap.
+		shutdownCtx: context.Background(),
 	}
 }
 
-func (s *paymentService) CreateInvoice(ctx context.Context, studentUUID string, req domain.CheckoutRequest) (*domain.CheckoutResponse, error) {
-	// 1. Get Package Details
-	// We need a method to get package details. studentRepo has GetAllAvailablePackages, but maybe not GetPackageByID?
-	// Let's assume we can fetch it or we need to add a method.
-	// Checking repository/student.go, we only have GetAllAvailablePackages.
-	// We might need to query the DB directly since we have the DB instance or add a repo method.
-	// Since we have `s.db`, let's query the Package.
+// SetShutdownContext wires the app-level cancellable context into the service.
+// Call this in bootstrap after creating the service, passing the context that
+// is cancelled when os.Signal triggers graceful shutdown.
+// This allows in-flight WA goroutines to stop cleanly instead of being orphaned.
+func (s *paymentService) SetShutdownContext(ctx context.Context) {
+	s.shutdownCtx = ctx
+}
 
+func (s *paymentService) CreateInvoice(ctx context.Context, studentUUID string, req domain.CheckoutRequest) (*domain.CheckoutResponse, error) {
+	// 1. Get Package details
 	var pkg domain.Package
 	if err := s.db.WithContext(ctx).First(&pkg, req.PackageID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -101,16 +101,10 @@ func (s *paymentService) CreateInvoice(ctx context.Context, studentUUID string, 
 		return nil, fmt.Errorf("xendit error: %v", err)
 	}
 
-	// 4. Update Payment with Invoice URL and Xendit ID
-	// We need to store Xendit Invoice ID? We added it to the struct.
-	// Reuse UpdateStatus or manual update? The repo only has UpdateStatus.
-	// Let's do a direct update here via DB for the generic fields if repo doesn't support it,
-	// OR better: Update the payment object we just created and save it.
-
+	// 4. Update Payment with Invoice URL and Xendit Invoice ID.
 	payment.InvoiceURL = resp.InvoiceUrl
 	payment.XenditInvoiceID = *resp.Id
 
-	// Saving changes
 	if err := s.db.WithContext(ctx).Save(payment).Error; err != nil {
 		return nil, err
 	}
@@ -123,7 +117,7 @@ func (s *paymentService) CreateInvoice(ctx context.Context, studentUUID string, 
 
 func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.Invoice) error {
 
-	// 1. Verify payment exists
+	// 1. Verify payment exists and has both Student + Package preloaded.
 	payment, err := s.paymentRepo.FindByExternalID(ctx, payload.ExternalId)
 	if err != nil {
 		return err
@@ -132,22 +126,29 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 		return errors.New("payment not found")
 	}
 
-	// 2. Check status
+	// 2. Idempotency guard — already processed.
 	if payment.Status == domain.PaymentStatusPaid {
-		return nil // Already paid
+		return nil
 	}
 
-	// If PAID
 	if string(payload.Status) == "PAID" || string(payload.Status) == "SETTLED" {
-		// Start Transaction
+		// Guard: Package must be loaded; if preload silently failed we’d panic below.
+		if payment.Package.ID == 0 {
+			return fmt.Errorf("package (id=%d) not loaded for payment %s — preload may have failed",
+				payment.PackageID, payment.ExternalID)
+		}
+
 		tx := s.db.Begin()
+		if tx.Error != nil {
+			return fmt.Errorf("failed to begin transaction: %w", tx.Error)
+		}
 		defer func() {
 			if r := recover(); r != nil {
 				tx.Rollback()
 			}
 		}()
 
-		// Update payment status
+		// Update payment status.
 		now := time.Now()
 		payment.Status = domain.PaymentStatusPaid
 		payment.PaidAt = &now
@@ -156,21 +157,22 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 			return err
 		}
 
-		// check student profile exist
-		exist, _ := s.paymentRepo.CheckStudentProfileExist(ctx, payment.StudentUUID)
-		fmt.Println("exist", exist)
-		if !exist {
-			tx.Create(&domain.StudentProfile{
-				UserUUID: payment.StudentUUID,
-			})
+		// Ensure student profile exists.
+		var count int64
+		tx.Model(&domain.StudentProfile{}).Where("user_uuid = ?", payment.StudentUUID).Count(&count)
+		if count == 0 {
+			if err := tx.Create(&domain.StudentProfile{UserUUID: payment.StudentUUID}).Error; err != nil {
+				tx.Rollback()
+				return fmt.Errorf("failed to create student profile: %w", err)
+			}
 		}
 
 		studentPackage := domain.StudentPackage{
 			StudentUUID:    payment.StudentUUID,
 			PackageID:      payment.PackageID,
-			RemainingQuota: payment.Package.Quota, // Assuming Package was preloaded in FindByExternalID
+			RemainingQuota: payment.Package.Quota,
 			StartDate:      now,
-			EndDate:        now.AddDate(0, 0, payment.Package.ExpiredDuration), // Adds duration in days
+			EndDate:        now.AddDate(0, 0, payment.Package.ExpiredDuration),
 		}
 
 		if err := tx.Create(&studentPackage).Error; err != nil {
@@ -189,7 +191,6 @@ func (s *paymentService) HandleCallback(ctx context.Context, payload *invoice.In
 	} else if string(payload.Status) == "EXPIRED" {
 		s.paymentRepo.UpdateStatus(ctx, payment.ExternalID, domain.PaymentStatusExpired, nil)
 	} else {
-		// Other statuses
 		s.paymentRepo.UpdateStatus(ctx, payment.ExternalID, domain.PaymentStatusFailed, nil)
 	}
 
@@ -231,19 +232,19 @@ Terima kasih telah memilih MadEU! 🌟
 		pkg.ExpiredDuration,
 	)
 
-	// Create WhatsApp message
 	waMessage := &waE2E.Message{
 		Conversation: &msgToStudent,
 	}
 
-	// Send message asynchronously with proper context handling
+	// Capture shutdown context; goroutine will stop when app shuts down.
+	shutdownCtx := s.shutdownCtx
 	go func() {
-		// Create new background context for async operation
-		asyncCtx := context.Background()
-
-		// Send message
-		_, err := s.messenger.SendMessage(asyncCtx, studentJID, waMessage)
+		_, err := s.messenger.SendMessage(shutdownCtx, studentJID, waMessage)
 		if err != nil {
+			if shutdownCtx.Err() != nil {
+				log.Printf("🔕 WA notification cancelled (shutdown): student=%s", student.Name)
+				return
+			}
 			log.Printf("🔕 Gagal mengirim notifikasi WhatsApp ke %s (%s): %v",
 				student.Name, student.Phone, err)
 		} else {

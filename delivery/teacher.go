@@ -17,7 +17,7 @@ import (
 )
 
 type TeacherHandler struct {
-	tc domain.TeacherUseCase ``
+	tc domain.TeacherUseCase
 }
 
 func NewTeacherHandler(app *gin.Engine, tc domain.TeacherUseCase, jwtManager *utils.JWTManager, db *gorm.DB) {

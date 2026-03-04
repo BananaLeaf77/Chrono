@@ -26,7 +26,7 @@ func (r *userRepository) GetUserByTelephone(ctx context.Context, telephone strin
 
 func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
-	if err := r.db.WithContext(ctx).First(&user, "email = ?", email).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("email = ? AND deleted_at IS NULL", email).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
@@ -74,7 +74,10 @@ func (r *userRepository) DeleteUser(ctx context.Context, uuid string) error {
 
 func (r *userRepository) Login(ctx context.Context, email, password string) (*domain.User, error) {
 	var user domain.User
-	if err := r.db.WithContext(ctx).First(&user, "email = ? AND password = ?", email, password).Error; err != nil {
+	// Explicitly exclude soft-deleted accounts so deactivated users cannot log in.
+	if err := r.db.WithContext(ctx).
+		Where("email = ? AND password = ? AND deleted_at IS NULL", email, password).
+		First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil

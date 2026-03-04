@@ -64,8 +64,8 @@ func StudentAndAdminOnly() gin.HandlerFunc {
 func StudentOnly() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := utils.GetAPIHitter(c)
-		role, exists := c.Get("role")
-		if !exists || role == domain.RoleTeacher || role == domain.RoleManagement {
+		role, _ := c.Get("role")
+		if role != domain.RoleStudent {
 			utils.PrintLogInfo(&name, 403, "Student only Middleware - Role Check", nil)
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
